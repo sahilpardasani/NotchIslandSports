@@ -1,6 +1,6 @@
 # 🏟️ NotchIslandSports
 
-A premium, native macOS background utility that transforms your MacBook Pro screen notch into a highly fluid, responsive live sports tracking dashboard. 
+A premium, native macOS background utility that transforms your MacBook Pro/Air screen notch into a highly fluid, responsive live sports tracking dashboard. 
 
 Stream real-time ball-by-ball sports data and score updates natively right under your display bezel.
 
