@@ -20,7 +20,7 @@ Extract the file and drag NotchIslandSports.app straight into your Applications 
 First-Time Activation Bypass: Right-click (Control-click) NotchIslandSports.app and select Open from the menu. When the unverified developer security warning box appears, click Open to authorize your Mac to run the ad-hoc build.
 Clear Quarantine Hold (If Blocked): If macOS treats the bundle as damaged or blocked, pop open your Terminal app and clear the Gatekeeper quarantine flag by running: xattr -cr /Applications/NotchIslandSports.app
 
-## App Previwes
+## App Previews
 Here is how the application renders on screen during live match intervals:
 
 ### 1. Collapsed Untruncated View (Intel / Flat Bezel Screens)
