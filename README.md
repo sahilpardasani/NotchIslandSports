@@ -26,7 +26,10 @@ Here is how the application renders on screen during live match intervals:
 ### 1. Collapsed Untruncated View (Intel / Flat Bezel Screens)
 ![Collapsed Intel Layout](compressed_view_intel_macs.png)
 
-### 2. Expanded Scorecard Dropdown Panel
+### 2. Collapsed Untruncated View (Apple Silicon / With notch)
+<img width="452" height="43" alt="Collapse_view_on_apple_silicon" src="https://github.com/user-attachments/assets/ef7eb42a-44a9-460b-9e02-f45098f93454" />
+
+### 3. Expanded Scorecard Dropdown Panel
 ![Expanded Live Stats Grid](expanded_view_intel_macs.png)
 
 ## 📄 License & Copyright
