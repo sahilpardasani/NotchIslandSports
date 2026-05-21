@@ -8,7 +8,7 @@ Stream real-time ball-by-ball sports data and score updates natively right under
 
 ## ✨ Features
 
-* **🏏 Live Multi-Sport Engine:** Production-grade background parsing across 8 sports (Cricket/IPL, Tennis, NFL, College Football, College Basketball, Soccer, Lacrosse, and Volleyball) powered by polling-optimized ESPN API endpoints.
+* **🏏 Live Multi-Sport Engine:** Production-grade background parsing across 8 sports (Cricket/IPL, Tennis, NFL, College Football, College Basketball, Soccer, Lacrosse,Volleyball, MLB, NBA, F-1,NHL, College Ice Hockey) powered by polling-optimized ESPN API endpoints.
 * **🏏 Cricket Mode:** 
 •	Collapsed View: A tight, minimalist pill showing team names and the current score line (e.g., 🏏 GT 185/4 • CSK).
 •	On Hover: The panel stretches downward into a detailed match scorecard
