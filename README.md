@@ -9,6 +9,9 @@ Stream real-time ball-by-ball sports data and score updates natively right under
 ## ✨ Features
 
 * **🏏 Live Multi-Sport Engine:** Production-grade background parsing across 8 sports (Cricket/IPL, Tennis, NFL, College Football, College Basketball, Soccer, Lacrosse, and Volleyball) powered by polling-optimized ESPN API endpoints.
+* **🏏 Cricket Mode:** 
+•	Collapsed View: A tight, minimalist pill showing team names and the current score line (e.g., 🏏 GT 185/4 • CSK).
+•	On Hover: The panel stretches downward into a detailed match scorecard
 * **📱 Adaptive Bezel Layouts:** Native geometry inspection. If running on a notched Apple Silicon MacBook Pro, it locks down into an ultra-compact **220pt capsule**. If running on flat-bezel MacBooks (Intel), it dynamically expands into a detailed, untruncated **340pt floating pill**.
 * **🔄 Rolling Recency & Auto-Pivoting:** Smart layout hierarchy prioritizes live matches automatically. If no active live frames are running, the app gracefully cycles the last 24 hours of completed games (like yesterday's KKR vs MI clash) or renders visual upcoming match countdown badges.
 
