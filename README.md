@@ -31,6 +31,8 @@ Here is how the application renders on screen during live match intervals:
 
 ### 3. Expanded Scorecard Dropdown Panel
 ![Expanded Live Stats Grid](expanded_view_intel_macs.png)
+<img width="373" height="131" alt="Screenshot 2026-05-21 at 11 47 20 AM" src="https://github.com/user-attachments/assets/f1a7317b-17a3-434b-990d-23ec04cceaf5" />
+
 
 ## 📄 License & Copyright
 
