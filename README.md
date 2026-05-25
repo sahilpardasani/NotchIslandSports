@@ -14,6 +14,7 @@ Stream real-time ball-by-ball sports data and score updates natively right under
 •	On Hover: The panel stretches downward into a detailed match scorecard
 * **📱 Adaptive Bezel Layouts:** Native geometry inspection. If running on a notched Apple Silicon MacBook Pro, it locks down into an ultra-compact **220pt capsule**. If running on flat-bezel MacBooks (Intel), it dynamically expands into a detailed, untruncated **340pt floating pill**.
 * **🔄 Rolling Recency & Auto-Pivoting:** Smart layout hierarchy prioritizes live matches automatically. If no active live frames are running, the app gracefully cycles the last 24 hours of completed games (like yesterday's KKR vs MI clash) or renders visual upcoming match countdown badges.
+* **Multi Language Support and other features in cricket scorecard** One can now view the cricket scorecard also in Hindi language. Features also added include animation to show drinks break, end of innings, stumps etc.
 
 ---
 
