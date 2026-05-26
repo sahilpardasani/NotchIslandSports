@@ -24,6 +24,12 @@ Extract the file and drag NotchIslandSports.app straight into your Applications 
 First-Time Activation Bypass: Right-click (Control-click) NotchIslandSports.app and select Open from the menu. When the unverified developer security warning box appears, click Open to authorize your Mac to run the ad-hoc build.
 Clear Quarantine Hold (If Blocked): If macOS treats the bundle as damaged or blocked, pop open your Terminal app and clear the Gatekeeper quarantine flag by running: xattr -cr /Applications/NotchIslandSports.app
 
+To select match click on the icon in menu bar and select match then hover over the black colored bar and you can choose your matche by clicking it.
+<img width="578" height="256" alt="Screenshot 2026-05-26 at 10 42 41 AM" src="https://github.com/user-attachments/assets/a3703b1f-42aa-45de-af90-33c2e06a2c0d" />
+<img width="265" height="250" alt="Screenshot 2026-05-26 at 10 42 16 AM" src="https://github.com/user-attachments/assets/077881cb-0835-4ff2-a973-edae4128ec07" />
+
+
+
 ## App Previews
 Here is how the application renders on screen during live match intervals:
 
