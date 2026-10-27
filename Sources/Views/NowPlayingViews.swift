@@ -6,49 +6,15 @@ import Cocoa
 struct DynamicIslandWaveform: View {
     let isPlaying: Bool
     let color: Color
-    let barCount: Int
-
-    @State private var barHeights: [CGFloat] = []
-    private let timer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
-
-    init(isPlaying: Bool, color: Color, barCount: Int = 3) {
-        self.isPlaying = isPlaying
-        self.color = color
-        self.barCount = barCount
-        _barHeights = State(initialValue: Array(repeating: 4, count: barCount))
-    }
-
+    var barCount: Int = 3
     var body: some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            ForEach(0..<barCount, id: \.self) { i in
+        HStack(spacing: 2.5) {
+            ForEach(0..<barCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(color)
-                    .frame(width: 3, height: barHeights.indices.contains(i) ? barHeights[i] : 4)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.65), value: barHeights.indices.contains(i) ? barHeights[i] : 4)
+                    .frame(width: 3, height: isPlaying ? CGFloat([8, 17, 11, 15, 7][index % 5]) : 4)
             }
-        }
-        .frame(height: 20, alignment: .center)
-        .onReceive(timer) { _ in
-            guard isPlaying else {
-                if barHeights.contains(where: { $0 != 4 }) {
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.65)) {
-                        barHeights = Array(repeating: 4, count: barCount)
-                    }
-                }
-                return
-            }
-            let heights: [CGFloat] = (0..<barCount).map { _ in CGFloat.random(in: 5...18) }
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.65)) {
-                barHeights = heights
-            }
-        }
-        .onAppear {
-            if isPlaying {
-                barHeights = (0..<barCount).map { _ in CGFloat.random(in: 5...18) }
-            } else {
-                barHeights = Array(repeating: 4, count: barCount)
-            }
-        }
+        }.frame(height: 20).accessibilityHidden(true)
     }
 }
 
@@ -56,11 +22,12 @@ struct DynamicIslandWaveform: View {
 
 struct NowPlayingLeftEar: View {
     let track: NowPlayingTrack
+    var artworkImage: NSImage? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             // Circular/Rounded album art, left-aligned to sit on the outer edge (like Sports icon)
-            if let data = track.artwork, let img = NSImage(data: data) {
+            if let img = artworkImage {
                 Image(nsImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -118,7 +85,7 @@ struct NowPlayingCollapsedView: View {
                 let earWidth: CGFloat = 110.0
                 HStack(spacing: 0) {
                     // LEFT EAR: album art (aligned outer edge)
-                    NowPlayingLeftEar(track: track)
+                    NowPlayingLeftEar(track: track, artworkImage: manager.artworkImage)
                         .frame(width: earWidth)
 
                     // CENTER: the physical notch (camera/sensor area)
@@ -140,11 +107,10 @@ struct NowPlayingCollapsedView: View {
 struct NowPlayingExpandedView: View {
     @ObservedObject var manager: NowPlayingManager
     
-    // Sub-second local interpolation for butter-smooth progress updates
-    @State private var interpolatedElapsedTime: TimeInterval = 0
-    private let progressTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+
 
     var body: some View {
+        TimelineView(.animation(minimumInterval: 1, paused: manager.currentTrack?.isPlaying != true || !manager.isActive)) { _ in
         Group {
             if let track = manager.currentTrack {
                 VStack(spacing: 0) {
@@ -153,7 +119,7 @@ struct NowPlayingExpandedView: View {
 
                         // Album Art with dominant color glow
                         ZStack {
-                            if let data = track.artwork, let img = NSImage(data: data) {
+                            if let img = manager.artworkImage {
                                 Image(nsImage: img)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
@@ -234,11 +200,11 @@ struct NowPlayingExpandedView: View {
 
                         // Time labels
                         HStack {
-                            Text(formatTime(interpolatedElapsedTime))
+                            Text(formatTime(manager.elapsedTime()))
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.45))
                             Spacer()
-                            Text("-" + formatTime(max(0, track.duration - interpolatedElapsedTime)))
+                            Text("-" + formatTime(max(0, track.duration - manager.elapsedTime())))
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.45))
                         }
@@ -260,6 +226,7 @@ struct NowPlayingExpandedView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(MediaControlButtonStyle())
+                        .disabled(!manager.canControl)
 
                         Spacer()
 
@@ -272,6 +239,7 @@ struct NowPlayingExpandedView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(MediaControlButtonStyle())
+                        .disabled(!manager.canControl)
 
                         Spacer()
 
@@ -290,6 +258,7 @@ struct NowPlayingExpandedView: View {
                             }
                         }
                         .buttonStyle(PlayPauseButtonStyle())
+                        .disabled(!manager.canControl)
 
                         Spacer()
 
@@ -302,6 +271,7 @@ struct NowPlayingExpandedView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(MediaControlButtonStyle())
+                        .disabled(!manager.canControl)
 
                         Spacer()
 
@@ -314,6 +284,7 @@ struct NowPlayingExpandedView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(MediaControlButtonStyle())
+                        .disabled(!manager.canControl)
 
                         Spacer()
                     }
@@ -322,16 +293,6 @@ struct NowPlayingExpandedView: View {
                     .padding(.bottom, 6)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onReceive(progressTimer) { _ in
-                    guard track.isPlaying else { return }
-                    interpolatedElapsedTime = min(track.duration, interpolatedElapsedTime + 0.1)
-                }
-                .onChange(of: track) { newTrack in
-                    interpolatedElapsedTime = newTrack.elapsedTime
-                }
-                .onAppear {
-                    interpolatedElapsedTime = track.elapsedTime
-                }
 
             } else {
                 // No active media state
@@ -355,11 +316,13 @@ struct NowPlayingExpandedView: View {
         }
     }
 
+    }
+
     // MARK: - Helpers
 
     private func progressRatio(_ track: NowPlayingTrack) -> Double {
         guard track.duration > 0 else { return 0 }
-        return min(1.0, max(0.0, interpolatedElapsedTime / track.duration))
+        return min(1.0, max(0.0, manager.elapsedTime() / track.duration))
     }
 
     private func formatTime(_ t: TimeInterval) -> String {
@@ -388,3 +351,4 @@ struct PlayPauseButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
+

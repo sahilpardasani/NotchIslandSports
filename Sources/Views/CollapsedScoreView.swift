@@ -13,7 +13,7 @@ struct CollapsedScoreView: View {
                 
                 // Middle spacer representing the notch (or standard gap)
                 Spacer()
-                    .frame(width: dataManager.hasNotch ? min(dataManager.notchWidth + 16, 170) : 60)
+                    .frame(width: dataManager.hasNotch ? dataManager.notchWidth + 16 : 60)
                 
                 // Right side
                 rightSideView(for: currentMatch)
@@ -29,7 +29,7 @@ struct CollapsedScoreView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Spacer()
-                    .frame(width: dataManager.hasNotch ? min(dataManager.notchWidth + 16, 170) : 60)
+                    .frame(width: dataManager.hasNotch ? dataManager.notchWidth + 16 : 60)
                 
                 Text("NotchIsland")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -156,7 +156,7 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
@@ -221,7 +221,7 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
@@ -358,7 +358,7 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
@@ -461,3 +461,4 @@ struct CollapsedScoreView: View {
         return false
     }
 }
+

@@ -1,5 +1,6 @@
 import Foundation
 import os
+import IslandCore
 
 // MARK: - Network Error
 
@@ -33,6 +34,7 @@ final class APIClient {
     static let shared = APIClient()
 
     private let session: URLSession
+    private let permits = AsyncPermitPool(limit: 4)
     private let logger = Logger(subsystem: "com.notchisland.sports", category: "APIClient")
 
     private init() {
@@ -53,6 +55,19 @@ final class APIClient {
         self.session = URLSession(configuration: config)
     }
 
+    private func limitedData(from url: URL) async throws -> (Data, URLResponse) {
+        try await permits.acquire()
+        do {
+            try Task.checkCancellation()
+            let result = try await session.data(from: url)
+            await permits.release()
+            return result
+        } catch {
+            await permits.release()
+            throw error
+        }
+    }
+
     // MARK: - Generic Fetch (Decodable)
 
     /// Fetches and decodes a `Decodable` type from the given URL.
@@ -61,9 +76,10 @@ final class APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await limitedData(from: url)
         } catch {
             logger.error("❌ Request failed: \(error.localizedDescription)")
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw NetworkError.requestFailed(error)
         }
 
@@ -102,9 +118,10 @@ final class APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await limitedData(from: url)
         } catch {
             logger.error("❌ Request failed: \(error.localizedDescription)")
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw NetworkError.requestFailed(error)
         }
 
@@ -140,9 +157,10 @@ final class APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await limitedData(from: url)
         } catch {
             logger.error("❌ Request failed: \(error.localizedDescription)")
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw NetworkError.requestFailed(error)
         }
 
@@ -155,3 +173,4 @@ final class APIClient {
         return data
     }
 }
+

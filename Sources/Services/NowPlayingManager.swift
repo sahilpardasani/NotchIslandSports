@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import Cocoa
+import IslandCore
 
 // MARK: - NowPlayingTrack Struct
 
@@ -14,6 +15,7 @@ struct NowPlayingTrack: Equatable {
     let isPlaying: Bool
     let artwork: Data?
     let dominantColor: Color
+    var sourceBundleID: String? = nil
 }
 
 // MARK: - NowPlayingManager
@@ -25,6 +27,28 @@ final class NowPlayingManager: ObservableObject {
     
     @Published var currentTrack: NowPlayingTrack?
     @Published var showMediaMode: Bool = false
+    @Published private(set) var controlError: String?
+    @Published private(set) var isActive = false
+    private(set) var positionAnchor = PlaybackAnchor(position: 0, instant: 0, rate: 0, duration: 0)
+    @Published var enabled = UserDefaults.standard.object(forKey: "ExperimentalMediaEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(enabled, forKey: "ExperimentalMediaEnabled")
+            if enabled && isActive { updateNowPlayingInfo() }
+            else { timer?.invalidate(); currentTrack = nil }
+        }
+    }
+    var canControl: Bool {
+        guard let id = currentTrack?.sourceBundleID else { return false }
+        return id == "com.apple.Music" || id == "com.spotify.client"
+    }
+    func elapsedTime() -> TimeInterval { positionAnchor.value(at: ProcessInfo.processInfo.systemUptime) }
+    private var getPID: (@convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void)?
+    private var requestID: UUID?
+    private var timeout: DispatchWorkItem?
+    private(set) var artworkImage: NSImage?
+    private var lastArtwork: Data?
+    private var lastColor = Color(hex: "A855F7")
+    private var commandProcess: Process?
     
     // MARK: - Private Properties
     
@@ -36,7 +60,7 @@ final class NowPlayingManager: ObservableObject {
     
     init() {
         loadMediaRemote()
-        startPolling()
+
     }
     
     deinit {
@@ -52,6 +76,7 @@ final class NowPlayingManager: ObservableObject {
         }
         
         self.mediaRemoteBundle = bundle
+        loadSourceLookup(bundle)
         
         if let getInfoPointer = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteGetNowPlayingInfo" as CFString) {
             typealias MRGetNowPlayingInfoFunction = @convention(c) (DispatchQueue, @escaping ([String: Any]?) -> Void) -> Void
@@ -59,77 +84,91 @@ final class NowPlayingManager: ObservableObject {
         }
     }
     
+    // Both metadata and source identification use private MediaRemote APIs.
+    // Unsupported systems degrade to an empty state, never synthetic metadata.
+    private func loadSourceLookup(_ bundle: CFBundle) {
+        if let pointer = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteGetNowPlayingApplicationPID" as CFString) {
+            typealias Lookup = @convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void
+            getPID = unsafeBitCast(pointer, to: Lookup.self)
+        }
+    }
+
     // MARK: - Polling
     
     func startPolling() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlayingInfo()
-            }
-        }
-        // Run immediately
+        guard !isActive else { return }
+        isActive = true
         updateNowPlayingInfo()
     }
-    
+
+    func stopPolling() {
+        isActive = false
+        timer?.invalidate(); timer = nil
+        timeout?.cancel(); timeout = nil
+        requestID = nil
+        commandProcess?.terminate(); commandProcess = nil
+    }
+
+    private func scheduleNext() {
+        guard isActive, enabled else { return }
+        timer?.invalidate()
+        let base: TimeInterval = currentTrack == nil ? 30 : (currentTrack?.isPlaying == true ? 5 : 15)
+        let interval = base * (ProcessInfo.processInfo.isLowPowerModeEnabled ? 2 : 1)
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.updateNowPlayingInfo() }
+        }
+        timer?.tolerance = interval * 0.2
+    }
+
     func updateNowPlayingInfo() {
-        guard let getNowPlayingInfo = getNowPlayingInfoFunc else { return }
-        
-        getNowPlayingInfo(DispatchQueue.main) { [weak self] info in
-            guard let self = self else { return }
-            
-            guard let info = info,
-                  let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String,
-                  !title.isEmpty else {
-                self.currentTrack = nil
-                return
-            }
-            
-            let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? "Unknown Artist"
-            let album = info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String ?? ""
-            let duration = info["kMRMediaRemoteNowPlayingInfoDuration"] as? TimeInterval ?? 0.0
-            let elapsedTime = info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? TimeInterval ?? 0.0
-            
-            // Playback rate: 0.0 = paused, 1.0 = playing
-            let playbackRate = info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0.0
-            let isPlaying = playbackRate > 0.0
-            
-            let artworkData = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data
-            
-            // Extract dominant color if artwork changed or use fallback
-            let dominantColor: Color
-            if let artwork = artworkData {
-                dominantColor = self.extractDominantColor(from: artwork) ?? Color(hex: "A855F7") // Premium purple fallback
-            } else {
-                dominantColor = Color(hex: "A855F7")
-            }
-            
-            let newTrack = NowPlayingTrack(
-                title: title,
-                artist: artist,
-                album: album,
-                duration: duration,
-                elapsedTime: elapsedTime,
-                isPlaying: isPlaying,
-                artwork: artworkData,
-                dominantColor: dominantColor
-            )
-            
-            if self.currentTrack != newTrack {
-                self.currentTrack = newTrack
-                
-                // Automatically switch to media mode if music starts playing and we weren't in media mode
-                if isPlaying && !self.showMediaMode {
-                    self.showMediaMode = true
+        guard isActive, enabled, requestID == nil else { return }
+        guard let getInfo = getNowPlayingInfoFunc else { return }
+        let token = UUID()
+        requestID = token
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self, self.requestID == token else { return }
+            self.requestID = nil
+            self.currentTrack = nil
+            self.scheduleNext()
+        }
+        self.timeout = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: timeout)
+        let fetch: (Int32) -> Void = { [weak self] pid in
+            getInfo(DispatchQueue.main) { [weak self] info in
+                guard let self, self.requestID == token else { return }
+                self.timeout?.cancel()
+                self.requestID = nil
+                defer { self.scheduleNext() }
+                guard self.isActive, self.enabled, let info,
+                      let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String, !title.isEmpty else {
+                    self.currentTrack = nil; return
                 }
+                let rate = info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0
+                let duration = info["kMRMediaRemoteNowPlayingInfoDuration"] as? Double ?? 0
+                let position = info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? Double ?? 0
+                let artwork = (info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data).flatMap { $0.count <= 4_000_000 ? $0 : nil }
+                if artwork != self.lastArtwork {
+                    self.lastArtwork = artwork
+                    self.artworkImage = artwork.flatMap(NSImage.init(data:))
+                    self.lastColor = self.artworkImage.flatMap { self.extractDominantColor(from: $0) } ?? Color(hex: "A855F7")
+                }
+                self.positionAnchor = PlaybackAnchor(position: position,
+                    instant: ProcessInfo.processInfo.systemUptime, rate: rate, duration: duration)
+                let track = NowPlayingTrack(title: title,
+                    artist: info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? "Unknown Artist",
+                    album: info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String ?? "",
+                    duration: duration, elapsedTime: position, isPlaying: rate > 0,
+                    artwork: artwork, dominantColor: self.lastColor,
+                    sourceBundleID: pid > 0 ? NSRunningApplication(processIdentifier: pid)?.bundleIdentifier : nil)
+                if self.currentTrack != track { self.currentTrack = track }
             }
         }
+        if let getPID { getPID(DispatchQueue.main, fetch) } else { fetch(0) }
     }
-    
+
     // MARK: - Dominant Color Extraction
     
-    private func extractDominantColor(from data: Data) -> Color? {
-        guard let nsImage = NSImage(data: data) else { return nil }
+    private func extractDominantColor(from nsImage: NSImage) -> Color? {
         
         let size = NSSize(width: 1, height: 1)
         guard let representation = NSBitmapImageRep(
@@ -188,162 +227,49 @@ final class NowPlayingManager: ObservableObject {
     }
     
     // MARK: - Playback Controls
-    
-    func playPause() {
-        executeAppleScript("""
-        tell application "System Events"
-            key code 16
-        end tell
-        """)
-        // Trigger quick local update
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.updateNowPlayingInfo()
+    // Fixed scripts target one identified application. No global key events or tab sweeps.
+    func playPause() { send(.playPause) }
+    func nextTrack() { send(.next) }
+    func previousTrack() { send(.previous) }
+    func skipForward15() { send(.forward) }
+    func skipBackward15() { send(.backward) }
+
+    private enum Command { case playPause, next, previous, forward, backward }
+    private func send(_ command: Command) {
+        guard canControl, commandProcess == nil, let source = currentTrack?.sourceBundleID,
+              let getPID else { return }
+        getPID(DispatchQueue.main) { [weak self] pid in
+            guard let self, self.isActive, self.currentTrack?.sourceBundleID == source,
+                  NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == source,
+                  self.commandProcess == nil else { return }
+            let action: String
+            switch command {
+            case .playPause: action = "playpause"
+            case .next: action = "next track"
+            case .previous: action = "previous track"
+            case .forward: action = "set player position to (player position + 15)"
+            case .backward: action = "set newPosition to (player position - 15)\nif newPosition < 0 then set newPosition to 0\nset player position to newPosition"
+            }
+            let application = source == "com.apple.Music" ? "Music" : "Spotify"
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", "tell application \"\(application)\" \n\(action)\nend tell"]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { [weak self] process in
+                Task { @MainActor in
+                    guard let self, self.commandProcess === process else { return }
+                    self.commandProcess = nil
+                    self.controlError = process.terminationStatus == 0 ? nil : "Playback control failed. Check Automation permission for this player."
+                    self.updateNowPlayingInfo()
+                }
+            }
+            self.commandProcess = process
+            do { try process.run() }
+            catch { self.commandProcess = nil; self.controlError = "Unable to control this player" }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak process] in
+                if process?.isRunning == true { process?.terminate() }
+            }
         }
-    }
-    
-    func nextTrack() {
-        executeAppleScript("""
-        tell application "System Events"
-            key code 19
-        end tell
-        """)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.updateNowPlayingInfo()
-        }
-    }
-    
-    func previousTrack() {
-        executeAppleScript("""
-        tell application "System Events"
-            key code 20
-        end tell
-        """)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.updateNowPlayingInfo()
-        }
-    }
-    
-    func skipForward15() {
-        executeAppleScript("""
-        -- Try Safari first
-        try
-            tell application "Safari"
-                repeat with w in windows
-                    repeat with t in tabs of w
-                        try
-                            set tabUrl to URL of t
-                            set tabName to name of t
-                            if tabUrl contains "youtube.com" or tabUrl contains "video" or tabUrl contains "netflix" or tabUrl contains "primevideo" or tabName contains "YouTube" then
-                                tell t to do JavaScript "document.querySelector('video').currentTime += 15;"
-                            end if
-                        end try
-                    end repeat
-                end repeat
-            end tell
-        end try
-
-        -- Try Chrome
-        try
-            tell application "Google Chrome"
-                repeat with w in windows
-                    repeat with t in tabs of w
-                        try
-                            set tabUrl to URL of t
-                            set tabName to name of t
-                            if tabUrl contains "youtube.com" or tabUrl contains "video" or tabUrl contains "netflix" or tabUrl contains "primevideo" or tabName contains "YouTube" then
-                                execute t javascript "document.querySelector('video').currentTime += 15;"
-                            end if
-                        end try
-                    end repeat
-                end repeat
-            end tell
-        end try
-
-        -- Try Spotify
-        try
-            tell application "Spotify"
-                if player state is playing or player state is paused then
-                    set player position to (player position + 15)
-                end if
-            end tell
-        end try
-
-        -- Try Music
-        try
-            tell application "Music"
-                if player state is playing or player state is paused then
-                    set player position to (player position + 15)
-                end if
-            end tell
-        end try
-        """)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            self.updateNowPlayingInfo()
-        }
-    }
-    
-    func skipBackward15() {
-        executeAppleScript("""
-        -- Try Safari first
-        try
-            tell application "Safari"
-                repeat with w in windows
-                    repeat with t in tabs of w
-                        try
-                            set tabUrl to URL of t
-                            set tabName to name of t
-                            if tabUrl contains "youtube.com" or tabUrl contains "video" or tabUrl contains "netflix" or tabUrl contains "primevideo" or tabName contains "YouTube" then
-                                tell t to do JavaScript "document.querySelector('video').currentTime -= 15;"
-                            end if
-                        end try
-                    end repeat
-                end repeat
-            end tell
-        end try
-
-        -- Try Chrome
-        try
-            tell application "Google Chrome"
-                repeat with w in windows
-                    repeat with t in tabs of w
-                        try
-                            set tabUrl to URL of t
-                            set tabName to name of t
-                            if tabUrl contains "youtube.com" or tabUrl contains "video" or tabUrl contains "netflix" or tabUrl contains "primevideo" or tabName contains "YouTube" then
-                                execute t javascript "document.querySelector('video').currentTime -= 15;"
-                            end if
-                        end try
-                    end repeat
-                end repeat
-            end tell
-        end try
-
-        -- Try Spotify
-        try
-            tell application "Spotify"
-                if player state is playing or player state is paused then
-                    set player position to (player position - 15)
-                end if
-            end tell
-        end try
-
-        -- Try Music
-        try
-            tell application "Music"
-                if player state is playing or player state is paused then
-                    set player position to (player position - 15)
-                end if
-            end tell
-        end try
-        """)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            self.updateNowPlayingInfo()
-        }
-    }
-    
-    private func executeAppleScript(_ scriptText: String) {
-        guard let script = NSAppleScript(source: scriptText) else { return }
-        var error: NSDictionary?
-        script.executeAndReturnError(&error)
     }
 }

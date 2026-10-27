@@ -139,7 +139,7 @@ struct MatchSelectorView: View {
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 4) {
-                    ForEach(filteredMatches, id: \.id) { match in
+                    ForEach(filteredMatches, id: \.identity) { match in
                         matchRow(for: match)
                     }
                 }
@@ -314,10 +314,11 @@ struct MatchSelectorView: View {
     
     private func isActiveMatch(_ match: AnyMatch) -> Bool {
         guard let active = dataManager.activeMatch else { return false }
-        return active.id == match.id
+        return active.identity == match.identity
     }
     
     private func sportLabel(_ sport: SportType) -> String {
         sport.rawValue
     }
 }
+

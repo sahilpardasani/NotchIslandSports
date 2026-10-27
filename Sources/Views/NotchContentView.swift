@@ -5,6 +5,7 @@
 // and expanded sport-specific detail card.
 
 import SwiftUI
+import IslandCore
 
 // MARK: - Color Extension
 
@@ -87,313 +88,87 @@ enum DesignSystem {
 struct NotchContentView: View {
     @ObservedObject var hoverState: HoverState
     @ObservedObject var dataManager: SportsDataManager
-    
-    @StateObject private var nowPlayingManager = NowPlayingManager()
-    @State private var isExpanded: Bool = false
-    @State private var selectedTab: Tab = .sports
-    
-    enum Tab {
-        case sports
-        case nowPlaying
-    }
-    
-    private let expandAnimation: Animation = .easeInOut(duration: 0.35)
-    
-    private var collapsedWidth: CGFloat {
-        let baseSpacer: CGFloat = dataManager.hasNotch ? min(dataManager.notchWidth + 16, 170) : 60
-        let padding: CGFloat = 80 // Increased horizontal padding on each side for spaciousness (added ~8px to both sides)
-        
-        guard let match = dataManager.activeMatch else {
-            // "📺 No Active Matches" (~130px) + spacer + "NotchIsland" (~80px)
-            return 130 + baseSpacer + 80 + padding
-        }
-        
-        switch match {
-        case .tennis(let tennisMatch):
-            var leftSideWidth: CGFloat = 56 // Increased Team Name width
-            if tennisMatch.status == .live {
-                leftSideWidth += 10 // live dot
-            }
-            if tennisMatch.servingPlayer == 2 && tennisMatch.status == .live {
-                leftSideWidth += 10 // serving dot
-            }
-            if !tennisMatch.sets.isEmpty {
-                leftSideWidth += CGFloat(tennisMatch.sets.count) * 14 // More room for sets
-                if tennisMatch.activeGameScore != nil && tennisMatch.status == .live {
-                    leftSideWidth += 46 // "(30-40)" score text
-                }
-            }
-            
-            var rightSideWidth: CGFloat = 56 // Increased Team Name width
-            if tennisMatch.servingPlayer == 1 && tennisMatch.status == .live {
-                rightSideWidth += 10 // serving dot
-            }
-            if !tennisMatch.sets.isEmpty {
-                rightSideWidth += CGFloat(tennisMatch.sets.count) * 14 // More room for sets
-                if tennisMatch.activeGameScore != nil && tennisMatch.status == .live {
-                    rightSideWidth += 46 // "(30-40)" score text
-                }
-            }
-            
-            return leftSideWidth + baseSpacer + rightSideWidth + padding
-            
-        case .cricket(let cricketMatch):
-            var leftSideWidth: CGFloat = 104 // Increased for breathing room
-            var rightSideWidth: CGFloat = 104 // Increased for breathing room
-            
-            // If limited overs, add some extra space to accommodate overs text
-            let text = (cricketMatch.matchDescription + " " + cricketMatch.statusText).lowercased()
-            let isLimitedOvers = text.contains("t20") || text.contains("ipl") || text.contains("t-20") || 
-                                 text.contains("odi") || text.contains("one day") || text.contains("50 overs") || 
-                                 text.contains("t10") || text.contains("hundred") ||
-                                 (cricketMatch.leagueId?.lowercased().contains("ipl") == true) ||
-                                 (cricketMatch.leagueId?.lowercased().contains("t20") == true) ||
-                                 (cricketMatch.leagueId?.lowercased().contains("hundred") == true)
-            
-            if isLimitedOvers {
-                leftSideWidth += 70 // " (43.0/20)"
-                rightSideWidth += 60 // " (20/20)"
-            }
-            
-            return leftSideWidth + baseSpacer + rightSideWidth + padding
-            
-        default:
-            // Soccer / NFL / NBA / NHL typical scores: e.g. "ABR 24" (~70px) and "17 ABR" (~70px)
-            return 96 + baseSpacer + 96 + padding
-        }
-    }
-    
-    private var expandedHeight: CGFloat {
-        if dataManager.showMatchSelector {
-            return 280
-        }
-        
-        if selectedTab == .nowPlaying && nowPlayingManager.currentTrack != nil {
-            return 160
-        }
-        
-        guard let match = dataManager.activeMatch else {
-            return 240
-        }
-        
-        switch match {
-        case .cricket:
-            return 360
-        case .tennis:
-            return 210
-        case .soccer:
-            return 220
-        case .lacrosse:
-            return 180
-        case .f1:
-            return 320
-        case .nfl, .collegeFootball:
-            return 240
-        default:
-            return 200
-        }
-    }
-    
-    private var currentWidth: CGFloat {
-        if isExpanded {
-            return dataManager.hasNotch ? 600 : 500
-        } else {
-            return collapsedWidth
-        }
-    }
-    
+    @ObservedObject var nowPlayingManager: NowPlayingManager
+    @ObservedObject var clockManager: NativeClockManager
+    @ObservedObject var presentation: IslandPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        ZStack {
-            // Background shape that morphs between capsule and rounded rect
-            backgroundShape
-            
-            // Content
-            if isExpanded {
-                expandedContent
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.95)),
-                        removal: .opacity.combined(with: .scale(scale: 0.98))
-                    ))
-            } else {
-                Group {
-                    if nowPlayingManager.showMediaMode, nowPlayingManager.currentTrack != nil {
-                        NowPlayingCollapsedView(manager: nowPlayingManager)
-                    } else {
-                        CollapsedScoreView(dataManager: dataManager)
+        Group {
+            if presentation.expanded {
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        tab("Sports", icon: "sportscourt", activity: .sports)
+                        tab("Music", icon: "music.note", activity: .music)
+                        tab("Clock", icon: "timer", activity: .clock)
+                        Button { presentation.collapse() } label: { Image(systemName: "xmark") }
+                            .buttonStyle(.plain).accessibilityLabel("Collapse island")
+                            .keyboardShortcut(.cancelAction)
                     }
-                }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 1.02)),
-                    removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onEnded { value in
-                            if abs(value.translation.width) > 20 {
-                                // Swipe gesture detected: toggle media / sports view
-                                if nowPlayingManager.currentTrack != nil {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                        nowPlayingManager.showMediaMode.toggle()
-                                    }
-                                }
-                            } else if abs(value.translation.height) < 10 && abs(value.translation.width) < 10 {
-                                // Tap gesture detected
-                                if nowPlayingManager.showMediaMode {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        nowPlayingManager.showMediaMode = false
-                                    }
-                                } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        dataManager.showMatchSelector.toggle()
-                                    }
+                    .padding(.horizontal, 10).padding(.top, 8)
+                    Group {
+                        switch presentation.selectedTab {
+                        case .sports:
+                            if dataManager.showMatchSelector { MatchSelectorView(dataManager: dataManager) }
+                            else if let match = dataManager.activeMatch { expandedView(for: match) }
+                            else { emptyState }
+                        case .music:
+                            VStack(spacing: 4) {
+                                NowPlayingExpandedView(manager: nowPlayingManager)
+                                if let error = nowPlayingManager.controlError {
+                                    Text(error).font(.caption).foregroundColor(.orange)
+                                } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {
+                                    Text("Playback controls are available for identified Music and Spotify sources.")
+                                        .font(.caption).foregroundColor(.secondary)
                                 }
                             }
+                        case .clock: NativeClockView(manager: clockManager)
                         }
-                )
-            }
-        }
-        .frame(
-            width: currentWidth,
-            height: isExpanded ? expandedHeight : 36
-        )
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity
-        )
-        .onChange(of: hoverState.isHovered) { newValue in
-            withAnimation(expandAnimation) {
-                isExpanded = newValue
-            }
-        }
-        .onChange(of: nowPlayingManager.showMediaMode) { newValue in
-            if newValue {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    selectedTab = .nowPlaying
-                }
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var backgroundShape: some View {
-        RoundedRectangle(
-            cornerRadius: isExpanded ? 20 : 18,
-            style: .continuous
-        )
-        .fill(DesignSystem.background)
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: isExpanded ? 20 : 18,
-                style: .continuous
-            )
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.15),
-                        Color.white.opacity(0.05),
-                        Color.clear
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 0.5
-            )
-        )
-        .shadow(
-            color: .black.opacity(isExpanded ? 0.4 : 0.15),
-            radius: isExpanded ? 20 : 4,
-            x: 0,
-            y: isExpanded ? 8 : 2
-        )
-    }
-    
-    // MARK: - Expanded Content
-    
-    private var segmentHeader: some View {
-        HStack(spacing: 0) {
-            // Sports Tab Button
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    selectedTab = .sports
-                }
-            }) {
-                HStack(spacing: 6) {
-                    Text("🏀")
-                        .font(.system(size: 11))
-                    Text("Sports")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                }
-                .foregroundColor(selectedTab == .sports ? .white : .white.opacity(0.5))
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(selectedTab == .sports ? Color.white.opacity(0.12) : Color.clear)
-                )
-            }
-            .buttonStyle(.plain)
-            
-            // Now Playing Tab Button
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    selectedTab = .nowPlaying
-                }
-            }) {
-                HStack(spacing: 6) {
-                    Text("🎵")
-                        .font(.system(size: 11))
-                    Text("Now Playing")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                }
-                .foregroundColor(selectedTab == .nowPlaying ? .white : .white.opacity(0.5))
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(selectedTab == .nowPlaying ? Color.white.opacity(0.12) : Color.clear)
-                )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(3)
-        .background(Color.black.opacity(0.2))
-        .cornerRadius(10)
-    }
-    
-    @ViewBuilder
-    private var expandedContent: some View {
-        VStack(spacing: 6) {
-            // Segment Bar at the top (only if not showing match selector and there is active media)
-            if !dataManager.showMatchSelector && nowPlayingManager.currentTrack != nil {
-                segmentHeader
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-            }
-            
-            Group {
-                if selectedTab == .sports || nowPlayingManager.currentTrack == nil {
-                    VStack(spacing: 0) {
-                        if dataManager.showMatchSelector {
-                            MatchSelectorView(dataManager: dataManager)
-                        } else if let match = dataManager.activeMatch {
-                            expandedView(for: match)
-                        } else {
-                            emptyState
-                        }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if presentation.selectedTab == .sports, let error = dataManager.detailError ?? dataManager.lastError {
+                        Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
                     }
-                } else {
-                    NowPlayingExpandedView(manager: nowPlayingManager)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
                 }
+            } else {
+                Button {
+                    presentation.open(presentation.selection.primary ?? .sports)
+                } label: {
+                    Group {
+                        switch presentation.selection.primary ?? .sports {
+                        case .sports: CollapsedScoreView(dataManager: dataManager)
+                        case .music: NowPlayingCollapsedView(manager: nowPlayingManager)
+                        case .clock: NativeClockCompactView(manager: clockManager, minimal: false)
+                        }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Expand \(presentation.selection.primary?.rawValue ?? "sports") activity")
             }
-            .frame(maxHeight: .infinity)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18).fill(Color.black))
+        .foregroundColor(.white)
+        .preferredColorScheme(.dark)
+        .transaction { if reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
+        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+            if abs(value.translation.width) > abs(value.translation.height) {
+                presentation.cyclePrimary()
+            }
+        })
+        .onExitCommand { presentation.collapse() }
     }
-    
+
+    private func tab(_ title: String, icon: String, activity: IslandActivity) -> some View {
+        Button { presentation.open(activity) } label: {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(maxWidth: .infinity).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 8)
+                    .fill(presentation.selectedTab == activity ? Color.white.opacity(0.16) : .clear))
+        }.buttonStyle(.plain)
+        .accessibilityAddTraits(presentation.selectedTab == activity ? .isSelected : [])
+    }
+
     @ViewBuilder
     private func expandedView(for match: AnyMatch) -> some View {
         switch match {
@@ -464,7 +239,7 @@ struct NotchContentView: View {
                 .foregroundColor(DesignSystem.secondaryText)
             
             Button(action: {
-                withAnimation(expandAnimation) {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     dataManager.showMatchSelector = true
                 }
             }) {
@@ -483,3 +258,4 @@ struct NotchContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+

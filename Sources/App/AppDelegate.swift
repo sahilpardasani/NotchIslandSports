@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import IslandCore
 
 // MARK: - AppDelegate
 
@@ -10,6 +11,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var panelController: NotchPanelController!
     private let dataManager = SportsDataManager()
+    private let media = NowPlayingManager()
+    private let clock = NativeClockManager()
+    private let presentation = IslandPresentation()
+    private var systemSleeping = false
+    private var displaySleeping = false
+    private var sessionInactive = false
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Application Lifecycle
@@ -17,12 +24,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusBarItem()
         setupPanelController()
-        startDataPolling()
+        resumeProviders()
         observeSystemEvents()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        dataManager.stopPolling()
+        suspendProviders()
     }
     
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -69,6 +76,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        let openItem = NSMenuItem(title: "Open Island", action: #selector(openIsland), keyEquivalent: "o")
+        openItem.target = self
+        menu.addItem(openItem)
+        let clockItem = NSMenuItem(title: "Apple Clock…", action: #selector(openNativeClock), keyEquivalent: "t")
+        clockItem.target = self
+        menu.addItem(clockItem)
+        let mediaItem = NSMenuItem(title: "Experimental System Media", action: #selector(toggleMedia(_:)), keyEquivalent: "")
+        mediaItem.target = self
+        mediaItem.state = media.enabled ? .on : .off
+        menu.addItem(mediaItem)
+        menu.addItem(NSMenuItem.separator())
+
         // Refresh
         let refreshItem = NSMenuItem(title: "Refresh Now", action: #selector(refreshData), keyEquivalent: "r")
         refreshItem.target = self
@@ -102,60 +121,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Panel Controller
     
     private func setupPanelController() {
-        panelController = NotchPanelController(dataManager: dataManager)
+        panelController = NotchPanelController(dataManager: dataManager, media: media, clock: clock, presentation: presentation)
         panelController.setupPanel()
     }
     
-    // MARK: - Data Polling
-    
-    private func startDataPolling() {
+    private func resumeProviders() {
+        guard !systemSleeping, !displaySleeping, !sessionInactive else { return }
+        presentation.suspended = false
+        updatePowerPolicy()
         dataManager.startPolling()
-        
-        // Initial fetch
-        Task { @MainActor in
-            await dataManager.fetchAllMatches()
-        }
+        media.startPolling()
+        clock.start()
+        panelController.show()
     }
-    
-    // MARK: - System Event Observers
-    
+
+    private func suspendProviders() {
+        presentation.suspended = true
+        presentation.collapse()
+        dataManager.stopPolling()
+        media.stopPolling()
+        clock.stop()
+        panelController?.hide()
+    }
+
+    private func updatePowerPolicy() {
+        presentation.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled ||
+            ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical
+        presentation.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        dataManager.setPresentation(expanded: presentation.expanded && presentation.selectedTab == .sports,
+                                    lowPower: presentation.lowPower)
+    }
+
     private func observeSystemEvents() {
-        // Screen parameter changes (external display connect/disconnect)
-        NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.panelController.repositionForScreen()
-            }
+        let workspace = NSWorkspace.shared.notificationCenter
+        func observe(_ name: Notification.Name, _ handler: @escaping (AppDelegate) -> Void) {
+            workspace.publisher(for: name).receive(on: DispatchQueue.main).sink { [weak self] _ in
+                guard let self else { return }
+                handler(self)
+            }.store(in: &cancellables)
         }
-        
-        // Sleep/Wake notifications
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.willSleepNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.dataManager.stopPolling()
-            }
-        }
-        
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.dataManager.startPolling()
-                Task { @MainActor [weak self] in
-                    await self?.dataManager.refresh()
-                }
-            }
+        observe(NSWorkspace.willSleepNotification) { $0.systemSleeping = true; $0.suspendProviders() }
+        observe(NSWorkspace.didWakeNotification) { $0.systemSleeping = false; $0.resumeProviders() }
+        observe(NSWorkspace.screensDidSleepNotification) { $0.displaySleeping = true; $0.suspendProviders() }
+        observe(NSWorkspace.screensDidWakeNotification) { $0.displaySleeping = false; $0.resumeProviders() }
+        observe(NSWorkspace.sessionDidResignActiveNotification) { $0.sessionInactive = true; $0.suspendProviders() }
+        observe(NSWorkspace.sessionDidBecomeActiveNotification) { $0.sessionInactive = false; $0.resumeProviders() }
+        observe(NSWorkspace.accessibilityDisplayOptionsDidChangeNotification) { $0.updatePowerPolicy() }
+        for name in [Notification.Name.NSProcessInfoPowerStateDidChange, ProcessInfo.thermalStateDidChangeNotification] {
+            NotificationCenter.default.publisher(for: name).receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.updatePowerPolicy() }.store(in: &cancellables)
         }
     }
-    
+
     // MARK: - Menu Actions
     
     @objc private func filterAllSports() {
@@ -169,9 +186,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func toggleMatchSelector() {
-        dataManager.showMatchSelector.toggle()
+        dataManager.showMatchSelector = true
+        dataManager.requestDiscovery()
+        panelController.open(.sports)
     }
     
+    @objc private func openIsland() { panelController.open(presentation.selection.primary ?? .sports) }
+    @objc private func openNativeClock() { panelController.open(.clock) }
+    @objc private func toggleMedia(_ sender: NSMenuItem) {
+        media.enabled.toggle()
+        sender.state = media.enabled ? .on : .off
+    }
+
     @objc private func refreshData() {
         Task { @MainActor in
             await dataManager.refresh()
@@ -181,7 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nSupported: Cricket, Tennis, NFL, FIFA/Soccer\n\nVersion 1.0\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Native Clock observation\n\nVersion 1.1 Preview\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
@@ -196,3 +222,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.terminate(nil)
     }
 }
+

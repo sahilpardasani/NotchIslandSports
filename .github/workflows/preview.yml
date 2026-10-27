@@ -1,0 +1,29 @@
+name: Build preview
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test core logic
+        run: swift test
+      - name: Command Line Tools compatible checks
+        run: bash scripts/check-core.sh
+      - name: Build preview application
+        env:
+          NOTCH_ARCH: ${{ matrix.arch }}
+        run: bash scripts/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NotchIslandSports-preview-${{ matrix.arch }}
+          path: build/NotchIslandSports-preview.zip
+          if-no-files-found: error

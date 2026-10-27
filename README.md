@@ -1,5 +1,8 @@
 # 🏟️ NotchIslandSports
 
+> **1.1 preview:** Battery/lifecycle fixes and split sports, music, and **native Apple Clock observation** are implemented on this branch. No in-app timers were added. Native Clock and system media integration are experimental. [Download/build instructions](docs/BUILDING.md) · [Changes and test checklist](docs/IMPLEMENTATION.md). The root ZIP below is still the older build.
+
+
 A premium, native macOS background utility that transforms your MacBook Pro/Air screen notch into a highly fluid, responsive live sports tracking dashboard. 
 
 Stream real-time ball-by-ball sports data and score updates natively right under your display bezel.
@@ -21,8 +24,8 @@ Stream real-time ball-by-ball sports data and score updates natively right under
 ## 📦 Fast Installation (No Coding Required)
 Download the NotchIslandSports.zip file from the file list above.
 Extract the file and drag NotchIslandSports.app straight into your Applications folder.
-First-Time Activation Bypass: Right-click (Control-click) NotchIslandSports.app and select Open from the menu. When the unverified developer security warning box appears, click Open to authorize your Mac to run the ad-hoc build.
-Clear Quarantine Hold (If Blocked): If macOS treats the bundle as damaged or blocked, pop open your Terminal app and clear the Gatekeeper quarantine flag by running: xattr -cr /Applications/NotchIslandSports.app
+For the updated preview, follow [Download/build instructions](docs/BUILDING.md). Preview builds are ad hoc signed; a Developer ID signed and notarized release is still pending. Follow normal macOS security prompts.
+
 
 To select match click on the icon in menu bar and select match then hover over the black colored bar and you can choose your matche by clicking it.
 <img width="578" height="256" alt="Screenshot 2026-05-26 at 10 42 41 AM" src="https://github.com/user-attachments/assets/a3703b1f-42aa-45de-af90-33c2e06a2c0d" />
@@ -53,5 +56,6 @@ This project is licensed under the terms of the MIT License.
 Copyright © 2026 Sahil Pardasani. All rights reserved. 
 
 Contributions, bug fixes, and feature requests for new sports divisions are welcome!
+
 
 

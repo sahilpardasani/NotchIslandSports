@@ -161,7 +161,7 @@ struct ExpandedCricketView: View {
             .onAppear {
                 withAnimation(
                     .easeInOut(duration: 0.8)
-                    .repeatForever(autoreverses: true)
+                    .repeatCount(2, autoreverses: true)
                 ) {
                     isBlinking = true
                 }
@@ -804,10 +804,11 @@ struct PulsingDot: View {
             .onAppear {
                 withAnimation(
                     .easeInOut(duration: 1.0)
-                    .repeatForever(autoreverses: true)
+                    .repeatCount(2, autoreverses: true)
                 ) {
                     isPulsing = true
                 }
             }
     }
 }
+

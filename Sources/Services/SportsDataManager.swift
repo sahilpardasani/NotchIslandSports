@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import os
+import IslandCore
 
 // MARK: - AnyMatch (Type-Erased Sport Event Wrapper)
 
@@ -19,6 +20,19 @@ enum AnyMatch: Identifiable {
     case nhl(NHLGame)
     case collegeHockey(CollegeHockeyGame)
     case f1(F1Race)
+
+    var identity: String {
+        let scope: String
+        switch self {
+        case .soccer(let m): scope = m.leagueSlug ?? ""
+        case .cricket(let m): scope = m.leagueId ?? ""
+        case .tennis(let m): scope = m.isWTA ? "wta" : "atp"
+        case .lacrosse(let m): scope = m.leagueSlug ?? ""
+        case .volleyball(let m): scope = m.leagueSlug ?? ""
+        default: scope = ""
+        }
+        return "\(sportType.rawValue):\(scope):\(id)"
+    }
 
     var id: String {
         switch self {
@@ -289,7 +303,24 @@ class SportsDataManager: ObservableObject {
     // MARK: - Published State
 
     @Published var allMatches: [AnyMatch] = []
-    @Published var activeMatch: AnyMatch?
+    @Published var activeMatch: AnyMatch? {
+        didSet {
+            if oldValue?.identity != activeMatch?.identity {
+                selectionGeneration.invalidate()
+                detailTask?.cancel()
+                detailTask = nil
+                detailRequestID = nil
+                lastDetailUpdate = nil
+                detailError = nil
+                detailFailures = 0
+                scheduleDetail(after: 0.2)
+            }
+        }
+    }
+    @Published private(set) var lastDetailUpdate: Date?
+    @Published private(set) var detailError: String?
+    var isExpanded = false
+    var lowPowerMode = false
     @Published var isLoading = false
     @Published var lastError: String?
     @Published var selectedSportFilter: SportType? = nil {
@@ -346,6 +377,17 @@ class SportsDataManager: ObservableObject {
 
     private var pollingTimer: Timer?
     private var detailTimer: Timer?
+    private var discoveryTask: Task<Void, Never>?
+    private var detailTask: Task<Void, Never>?
+    private var detailRequestID: UUID?
+    private var discoveryRequestID: UUID?
+    private var lifecycleGeneration = RequestGeneration()
+    private var selectionGeneration = RequestGeneration()
+    private var isPolling = false
+    private var suspended = false
+    private var discoveryFailures = 0
+    private var cacheDates: [SportType: Date] = [:]
+    private var detailFailures = 0
 
     // MARK: - Logger
 
@@ -402,49 +444,103 @@ class SportsDataManager: ObservableObject {
     // MARK: - Polling Control
 
     func startPolling() {
-        logger.info("Starting polling timers")
-
-        Task {
-            await fetchAllMatches()
-            await fetchActiveMatchDetail()
-        }
-
-        pollingTimer?.invalidate()
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.fetchAllMatches()
-            }
-        }
-
-        detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.fetchActiveMatchDetail()
-            }
-        }
+        guard !isPolling else { return }
+        isPolling = true
+        suspended = false
+        requestDiscovery()
+        scheduleDetail(after: 1)
     }
 
     func stopPolling() {
-        logger.info("Stopping polling timers")
-        pollingTimer?.invalidate()
-        pollingTimer = nil
-        detailTimer?.invalidate()
-        detailTimer = nil
+        isPolling = false
+        suspended = true
+        lifecycleGeneration.invalidate()
+        pollingTimer?.invalidate(); pollingTimer = nil
+        detailTimer?.invalidate(); detailTimer = nil
+        discoveryTask?.cancel(); discoveryTask = nil
+        detailTask?.cancel(); detailTask = nil
+        discoveryRequestID = nil; detailRequestID = nil
+        isLoading = false
     }
 
-    // MARK: - Unified Data Refresh
+    func requestDiscovery() {
+        guard !suspended else { return }
+        Task { [weak self] in await self?.fetchAllMatches() }
+    }
+
+    private func scheduleDiscovery() {
+        guard isPolling else { return }
+        pollingTimer?.invalidate()
+        let interval = PollPolicy.discovery(browsing: showMatchSelector,
+                                            lowPower: lowPowerMode, failures: discoveryFailures)
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.requestDiscovery() }
+        }
+        pollingTimer?.tolerance = interval * 0.15
+    }
+
+    private func scheduleDetail(after delay: TimeInterval? = nil) {
+        guard isPolling else { return }
+        detailTimer?.invalidate()
+        guard activeMatch != nil else { detailTimer = nil; return }
+        let interval = delay ?? PollPolicy.detail(live: activeMatch?.isLive == true,
+            completed: activeMatch?.isCompleted == true, expanded: isExpanded,
+            lowPower: lowPowerMode, failures: detailFailures)
+        detailTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor in await self?.fetchActiveMatchDetail() }
+        }
+        detailTimer?.tolerance = interval * 0.1
+    }
+
+    func setPresentation(expanded: Bool, lowPower: Bool) {
+        let becameExpanded = expanded && !isExpanded
+        isExpanded = expanded
+        lowPowerMode = lowPower
+        if becameExpanded && isPolling { scheduleDetail(after: 0.2) }
+        else { scheduleDetail() }
+        scheduleDiscovery()
+    }
 
     func refresh() async {
-        logger.info("Unified refresh triggered: updating match list and active match details")
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.fetchAllMatches() }
-            group.addTask { await self.fetchActiveMatchDetail() }
-        }
+        guard !suspended else { return }
+        await fetchAllMatches()
+        await fetchActiveMatchDetail()
+    }
+
+    func fetchAllMatches() async {
+        guard !suspended, !isUsingMockData else { return }
+        if let discoveryTask { await discoveryTask.value; return }
+        let requestID = UUID()
+        discoveryRequestID = requestID
+        let generation = lifecycleGeneration.value
+        let task = Task { await performDiscovery(generation: generation) }
+        discoveryTask = task
+        await task.value
+        guard discoveryRequestID == requestID else { return }
+        discoveryTask = nil
+        discoveryRequestID = nil
+        scheduleDiscovery()
+    }
+
+    func fetchActiveMatchDetail() async {
+        guard !suspended, !isUsingMockData else { return }
+        if let detailTask { await detailTask.value; return }
+        let requestID = UUID()
+        detailRequestID = requestID
+        let generation = lifecycleGeneration.value
+        let selection = selectionGeneration.value
+        let task = Task { await performDetail(generation: generation, selection: selection) }
+        detailTask = task
+        await task.value
+        guard detailRequestID == requestID else { return }
+        detailTask = nil
+        detailRequestID = nil
+        scheduleDetail()
     }
 
     // MARK: - Fetch All Matches
 
-    func fetchAllMatches() async {
+    private func performDiscovery(generation: UInt64) async {
         if isUsingMockData { return }
         isLoading = true
         lastError = nil
@@ -463,6 +559,8 @@ class SportsDataManager: ObservableObject {
         var collegeHockeyGames: [CollegeHockeyGame] = []
         var f1Races: [F1Race] = []
         var errors: [String] = []
+        let startedAt = Date()
+        var staleSports = Set<SportType>()
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor [self] in
@@ -470,14 +568,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.cricketService.fetchMatches()
                     if !fetched.isEmpty {
                         cricketMatches = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedCricketMatches = fetched
+                        self.cacheDates[.cricket] = Date()
                     } else {
-                        cricketMatches = self.cachedCricketMatches
+                        cricketMatches = self.cacheDates[.cricket].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCricketMatches : []
+                        if !cricketMatches.isEmpty { staleSports.insert(.cricket) }
                     }
                 } catch {
                     errors.append("Cricket: \(error.localizedDescription)")
                     self.logger.error("Cricket fetch failed: \(error.localizedDescription)")
-                    cricketMatches = self.cachedCricketMatches
+                    cricketMatches = self.cacheDates[.cricket].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCricketMatches : []
+                        if !cricketMatches.isEmpty { staleSports.insert(.cricket) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -485,14 +587,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.tennisService.fetchMatches()
                     if !fetched.isEmpty {
                         tennisMatches = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedTennisMatches = fetched
+                        self.cacheDates[.tennis] = Date()
                     } else {
-                        tennisMatches = self.cachedTennisMatches
+                        tennisMatches = self.cacheDates[.tennis].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedTennisMatches : []
+                        if !tennisMatches.isEmpty { staleSports.insert(.tennis) }
                     }
                 } catch {
                     errors.append("Tennis: \(error.localizedDescription)")
                     self.logger.error("Tennis fetch failed: \(error.localizedDescription)")
-                    tennisMatches = self.cachedTennisMatches
+                    tennisMatches = self.cacheDates[.tennis].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedTennisMatches : []
+                        if !tennisMatches.isEmpty { staleSports.insert(.tennis) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -500,14 +606,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.nflService.fetchGames()
                     if !fetched.isEmpty {
                         nflGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedNFLGames = fetched
+                        self.cacheDates[.nfl] = Date()
                     } else {
-                        nflGames = self.cachedNFLGames
+                        nflGames = self.cacheDates[.nfl].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNFLGames : []
+                        if !nflGames.isEmpty { staleSports.insert(.nfl) }
                     }
                 } catch {
                     errors.append("NFL: \(error.localizedDescription)")
                     self.logger.error("NFL fetch failed: \(error.localizedDescription)")
-                    nflGames = self.cachedNFLGames
+                    nflGames = self.cacheDates[.nfl].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNFLGames : []
+                        if !nflGames.isEmpty { staleSports.insert(.nfl) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -515,14 +625,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.collegeFootballService.fetchGames()
                     if !fetched.isEmpty {
                         cfbGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedCFBGames = fetched
+                        self.cacheDates[.collegeFootball] = Date()
                     } else {
-                        cfbGames = self.cachedCFBGames
+                        cfbGames = self.cacheDates[.collegeFootball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCFBGames : []
+                        if !cfbGames.isEmpty { staleSports.insert(.collegeFootball) }
                     }
                 } catch {
                     errors.append("CFB: \(error.localizedDescription)")
                     self.logger.error("CFB fetch failed: \(error.localizedDescription)")
-                    cfbGames = self.cachedCFBGames
+                    cfbGames = self.cacheDates[.collegeFootball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCFBGames : []
+                        if !cfbGames.isEmpty { staleSports.insert(.collegeFootball) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -530,14 +644,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.collegeBasketballService.fetchGames()
                     if !fetched.isEmpty {
                         cbbGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedCBBGames = fetched
+                        self.cacheDates[.collegeBasketball] = Date()
                     } else {
-                        cbbGames = self.cachedCBBGames
+                        cbbGames = self.cacheDates[.collegeBasketball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCBBGames : []
+                        if !cbbGames.isEmpty { staleSports.insert(.collegeBasketball) }
                     }
                 } catch {
                     errors.append("CBB: \(error.localizedDescription)")
                     self.logger.error("CBB fetch failed: \(error.localizedDescription)")
-                    cbbGames = self.cachedCBBGames
+                    cbbGames = self.cacheDates[.collegeBasketball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCBBGames : []
+                        if !cbbGames.isEmpty { staleSports.insert(.collegeBasketball) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -545,14 +663,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.soccerService.fetchMatches()
                     if !fetched.isEmpty {
                         soccerMatches = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedSoccerMatches = fetched
+                        self.cacheDates[.soccer] = Date()
                     } else {
-                        soccerMatches = self.cachedSoccerMatches
+                        soccerMatches = self.cacheDates[.soccer].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedSoccerMatches : []
+                        if !soccerMatches.isEmpty { staleSports.insert(.soccer) }
                     }
                 } catch {
                     errors.append("Soccer: \(error.localizedDescription)")
                     self.logger.error("Soccer fetch failed: \(error.localizedDescription)")
-                    soccerMatches = self.cachedSoccerMatches
+                    soccerMatches = self.cacheDates[.soccer].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedSoccerMatches : []
+                        if !soccerMatches.isEmpty { staleSports.insert(.soccer) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -560,14 +682,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.lacrosseService.fetchGames()
                     if !fetched.isEmpty {
                         lacrosseGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedLacrosseGames = fetched
+                        self.cacheDates[.lacrosse] = Date()
                     } else {
-                        lacrosseGames = self.cachedLacrosseGames
+                        lacrosseGames = self.cacheDates[.lacrosse].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedLacrosseGames : []
+                        if !lacrosseGames.isEmpty { staleSports.insert(.lacrosse) }
                     }
                 } catch {
                     errors.append("Lacrosse: \(error.localizedDescription)")
                     self.logger.error("Lacrosse fetch failed: \(error.localizedDescription)")
-                    lacrosseGames = self.cachedLacrosseGames
+                    lacrosseGames = self.cacheDates[.lacrosse].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedLacrosseGames : []
+                        if !lacrosseGames.isEmpty { staleSports.insert(.lacrosse) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -575,14 +701,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.volleyballService.fetchGames()
                     if !fetched.isEmpty {
                         volleyballGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedVolleyballGames = fetched
+                        self.cacheDates[.volleyball] = Date()
                     } else {
-                        volleyballGames = self.cachedVolleyballGames
+                        volleyballGames = self.cacheDates[.volleyball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedVolleyballGames : []
+                        if !volleyballGames.isEmpty { staleSports.insert(.volleyball) }
                     }
                 } catch {
                     errors.append("Volleyball: \(error.localizedDescription)")
                     self.logger.error("Volleyball fetch failed: \(error.localizedDescription)")
-                    volleyballGames = self.cachedVolleyballGames
+                    volleyballGames = self.cacheDates[.volleyball].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedVolleyballGames : []
+                        if !volleyballGames.isEmpty { staleSports.insert(.volleyball) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -590,14 +720,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.mlbService.fetchGames()
                     if !fetched.isEmpty {
                         mlbGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedMLBGames = fetched
+                        self.cacheDates[.mlb] = Date()
                     } else {
-                        mlbGames = self.cachedMLBGames
+                        mlbGames = self.cacheDates[.mlb].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedMLBGames : []
+                        if !mlbGames.isEmpty { staleSports.insert(.mlb) }
                     }
                 } catch {
                     errors.append("MLB: \(error.localizedDescription)")
                     self.logger.error("MLB fetch failed: \(error.localizedDescription)")
-                    mlbGames = self.cachedMLBGames
+                    mlbGames = self.cacheDates[.mlb].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedMLBGames : []
+                        if !mlbGames.isEmpty { staleSports.insert(.mlb) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -605,14 +739,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.nbaService.fetchGames()
                     if !fetched.isEmpty {
                         nbaGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedNBAGames = fetched
+                        self.cacheDates[.nba] = Date()
                     } else {
-                        nbaGames = self.cachedNBAGames
+                        nbaGames = self.cacheDates[.nba].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNBAGames : []
+                        if !nbaGames.isEmpty { staleSports.insert(.nba) }
                     }
                 } catch {
                     errors.append("NBA: \(error.localizedDescription)")
                     self.logger.error("NBA fetch failed: \(error.localizedDescription)")
-                    nbaGames = self.cachedNBAGames
+                    nbaGames = self.cacheDates[.nba].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNBAGames : []
+                        if !nbaGames.isEmpty { staleSports.insert(.nba) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -620,14 +758,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.nhlService.fetchGames()
                     if !fetched.isEmpty {
                         nhlGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedNHLGames = fetched
+                        self.cacheDates[.nhl] = Date()
                     } else {
-                        nhlGames = self.cachedNHLGames
+                        nhlGames = self.cacheDates[.nhl].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNHLGames : []
+                        if !nhlGames.isEmpty { staleSports.insert(.nhl) }
                     }
                 } catch {
                     errors.append("NHL: \(error.localizedDescription)")
                     self.logger.error("NHL fetch failed: \(error.localizedDescription)")
-                    nhlGames = self.cachedNHLGames
+                    nhlGames = self.cacheDates[.nhl].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedNHLGames : []
+                        if !nhlGames.isEmpty { staleSports.insert(.nhl) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -635,14 +777,18 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.collegeHockeyService.fetchGames()
                     if !fetched.isEmpty {
                         collegeHockeyGames = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedCollegeHockeyGames = fetched
+                        self.cacheDates[.collegeHockey] = Date()
                     } else {
-                        collegeHockeyGames = self.cachedCollegeHockeyGames
+                        collegeHockeyGames = self.cacheDates[.collegeHockey].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCollegeHockeyGames : []
+                        if !collegeHockeyGames.isEmpty { staleSports.insert(.collegeHockey) }
                     }
                 } catch {
                     errors.append("College Hockey: \(error.localizedDescription)")
                     self.logger.error("College Hockey fetch failed: \(error.localizedDescription)")
-                    collegeHockeyGames = self.cachedCollegeHockeyGames
+                    collegeHockeyGames = self.cacheDates[.collegeHockey].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedCollegeHockeyGames : []
+                        if !collegeHockeyGames.isEmpty { staleSports.insert(.collegeHockey) }
                 }
             }
             group.addTask { @MainActor [self] in
@@ -650,19 +796,26 @@ class SportsDataManager: ObservableObject {
                     let fetched = try await self.f1Service.fetchRaces()
                     if !fetched.isEmpty {
                         f1Races = fetched
+                        guard !Task.isCancelled, self.lifecycleGeneration.accepts(generation) else { return }
                         self.cachedF1Races = fetched
+                        self.cacheDates[.f1] = Date()
                     } else {
-                        f1Races = self.cachedF1Races
+                        f1Races = self.cacheDates[.f1].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedF1Races : []
+                        if !f1Races.isEmpty { staleSports.insert(.f1) }
                     }
                 } catch {
                     errors.append("F1: \(error.localizedDescription)")
                     self.logger.error("F1 fetch failed: \(error.localizedDescription)")
-                    f1Races = self.cachedF1Races
+                    f1Races = self.cacheDates[.f1].map { Date().timeIntervalSince($0) < 900 } == true ? self.cachedF1Races : []
+                        if !f1Races.isEmpty { staleSports.insert(.f1) }
                 }
             }
 
             await group.waitForAll()
         }
+
+        guard !Task.isCancelled, lifecycleGeneration.accepts(generation) else { return }
+        discoveryFailures = errors.isEmpty ? 0 : discoveryFailures + 1
 
         // Build unified match list — include ALL statuses
         var combined: [AnyMatch] = []
@@ -727,20 +880,26 @@ class SportsDataManager: ObservableObject {
 
         // Merge detailed properties from current allMatches to preserve live scorecards/stats
         combined = combined.map { newMatch in
-            if let existing = self.allMatches.first(where: { $0.id == newMatch.id }) {
+            if let existing = self.allMatches.first(where: { $0.identity == newMatch.identity }) {
                 return self.mergeMatchDetails(from: existing, to: newMatch)
             }
             return newMatch
         }
 
+        // A slower discovery snapshot must not roll back a newer selected-detail response.
+        if let updatedAt = lastDetailUpdate, updatedAt > startedAt, let current = activeMatch,
+           let index = combined.firstIndex(where: { $0.identity == current.identity }) {
+            combined[index] = current
+        }
         allMatches = combined
 
-        if !errors.isEmpty {
-            lastError = errors.joined(separator: "; ")
+        if !staleSports.isEmpty {
+            errors.append("Showing cached scores for " + staleSports.map(\.rawValue).sorted().joined(separator: ", "))
         }
+        lastError = errors.isEmpty ? nil : errors.joined(separator: "; ")
 
         isLoading = false
-        logger.info("Fetched \(combined.count) total matches across 7 sports (fallback sports: \(newFallbackSports.map { $0.rawValue }))")
+        logger.info("Fetched \(combined.count) total matches across 13 sports (fallback sports: \(newFallbackSports.map { $0.rawValue }))")
 
         if activeMatch == nil {
             restoreActiveMatch()
@@ -772,7 +931,7 @@ class SportsDataManager: ObservableObject {
 
     // MARK: - Fetch Active Match Detail
 
-    func fetchActiveMatchDetail() async {
+    private func performDetail(generation: UInt64, selection: UInt64) async {
         if isUsingMockData { return }
         guard let match = activeMatch else { return }
 
@@ -840,14 +999,23 @@ class SportsDataManager: ObservableObject {
                 }
             }
 
+            guard !Task.isCancelled, lifecycleGeneration.accepts(generation),
+                  selectionGeneration.accepts(selection), activeMatch?.identity == match.identity else { return }
             activeMatch = updatedMatch
+            lastDetailUpdate = Date()
+            detailError = nil
+            detailFailures = 0
 
-            if let index = allMatches.firstIndex(where: { $0.id == updatedMatch.id }) {
+            if let index = allMatches.firstIndex(where: { $0.identity == updatedMatch.identity }) {
                 allMatches[index] = updatedMatch
             }
 
             logger.info("Updated active match detail: \(updatedMatch.homeTeamAbbrev) vs \(updatedMatch.awayTeamAbbrev)")
         } catch {
+            guard !Task.isCancelled, lifecycleGeneration.accepts(generation),
+                  selectionGeneration.accepts(selection) else { return }
+            detailFailures += 1
+            detailError = "Score update unavailable — showing last known data"
             logger.error("Failed to fetch active match detail: \(error.localizedDescription)")
         }
     }
@@ -877,7 +1045,13 @@ class SportsDataManager: ObservableObject {
             return
         }
 
-        if let found = allMatches.first(where: { $0.id == matchId }) {
+        let sport = UserDefaults.standard.string(forKey: StorageKeys.activeMatchSport)
+        let league = UserDefaults.standard.string(forKey: StorageKeys.activeMatchLeague)
+        if let found = allMatches.first(where: {
+            guard $0.id == matchId, sport == nil || $0.sportType.rawValue == sport else { return false }
+            if let league { return $0.identity.contains(":\(league):") }
+            return true
+        }) {
             activeMatch = found
             logger.info("Restored active match: \(matchId)")
         }
@@ -886,7 +1060,7 @@ class SportsDataManager: ObservableObject {
     private func autoSelectActiveMatch() {
         // If there's an active match, keep it unless it has expired (completed and older than 48 hours).
         if let current = activeMatch {
-            if let found = allMatches.first(where: { $0.id == current.id }) {
+            if let found = allMatches.first(where: { $0.identity == current.identity }) {
                 // Update activeMatch with the latest live data from the feed, preserving detailed stats
                 activeMatch = mergeMatchDetails(from: current, to: found)
                 return
@@ -1056,3 +1230,4 @@ class SportsDataManager: ObservableObject {
         }
     }
 }
+
