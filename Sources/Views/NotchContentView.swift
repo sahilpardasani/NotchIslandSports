@@ -94,86 +94,110 @@ struct NotchContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-      GeometryReader { geometry in
-        let compactHeight = max(1, presentation.cameraHeight > 0 ? presentation.cameraHeight : 33)
-        let progress = min(1, max(0, (geometry.size.height - compactHeight) / max(1, presentation.expandedPanelHeight - compactHeight)))
-        ZStack(alignment: .top) {
-            if presentation.expanded || presentation.expandedContentMounted {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: presentation.cameraHeight)
-                    Group {
-                        switch presentation.contentActivity {
-                        case .sports:
-                            if dataManager.showMatchSelector { MatchSelectorView(dataManager: dataManager) }
-                            else if let match = dataManager.activeMatch { expandedView(for: match) }
-                            else { emptyState }
-                        case .music:
-                            VStack(spacing: 4) {
-                                NowPlayingExpandedView(manager: nowPlayingManager,
-                                    animationAllowed: mediaMotionAllowed && presentation.expanded && progress >= 0.99)
-                                if let error = nowPlayingManager.controlError {
-                                    Text(error).font(.caption).foregroundColor(.orange)
-                                } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {
-                                    Text("This player is not exposing playback controls.")
-                                        .font(.caption).foregroundColor(.secondary)
-                                }
-                            }
-                        case .calendar: NativeCalendarView(manager: calendarManager)
-                        case .clock: NativeClockView(manager: clockManager)
-                        }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if presentation.contentActivity == .sports, let error = dataManager.detailError ?? dataManager.lastError {
-                        Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
-                    }
-                    Button { presentation.collapse() } label: {
-                        Capsule().fill(Color.white.opacity(0.32)).frame(width: 34, height: 4)
-                            .frame(maxWidth: .infinity).frame(height: 18).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Collapse island")
-                    .keyboardShortcut(.cancelAction)
-                }
-                .frame(width: presentation.expandedPanelWidth, height: presentation.expandedPanelHeight, alignment: .top)
-                .opacity(min(1, max(0, (progress - 0.10) / 0.55)))
-                .allowsHitTesting(presentation.expanded && progress > 0.75)
-                .accessibilityHidden(!presentation.expanded)
-            }
-            if !presentation.expanded || progress < 1 {
-                Button {
-                    presentation.open(presentation.selection.primary ?? .sports)
-                } label: {
-                    Group {
-                        switch presentation.selection.primary ?? .sports {
-                        case .sports: CollapsedScoreView(dataManager: dataManager)
-                        case .music: cameraSafeCompact(.music)
-                        case .calendar: cameraSafeCompact(.calendar)
-                        case .clock: cameraSafeCompact(.clock)
-                        }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .buttonStyle(.plain)
-                .frame(height: compactHeight)
-                .opacity(max(0, 1 - progress / 0.25))
-                .allowsHitTesting(!presentation.expanded && progress < 0.25)
-                .accessibilityHidden(presentation.expanded)
-                .accessibilityLabel(presentation.selection.primary == .music ? "Expand music: \(nowPlayingManager.currentTrack?.title ?? "Music")" : "Expand \(presentation.selection.primary?.rawValue ?? "sports") activity")
-            }
+        GeometryReader { geometry in
+            islandSurface(size: geometry.size)
         }
-        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-        .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous)
-            .strokeBorder(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
-            .allowsHitTesting(false))
-        .clipShape(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18))
-        .foregroundColor(.white)
-        .preferredColorScheme(.dark)
-        .ignoresSafeArea()
-      }
         // Window-frame motion is the sole animator; avoid a second SwiftUI layout spring.
         .transaction { $0.animation = nil }
         .transaction { if reduceMotion || presentation.reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
         .modifier(IslandSwipeGesture(presentation: presentation, headerOnly: true))
         .onExitCommand { presentation.collapse() }
+    }
+
+    private var compactHeight: CGFloat {
+        max(1, presentation.cameraHeight > 0 ? presentation.cameraHeight : 33)
+    }
+
+    private func islandSurface(size: CGSize) -> some View {
+        let travel = max(1, presentation.expandedPanelHeight - compactHeight)
+        let progress: CGFloat = min(1, max(0, (size.height - compactHeight) / travel))
+        let radius: CGFloat = presentation.expanded ? 20 : 18
+        return ZStack(alignment: .top) {
+            if presentation.expanded || presentation.expandedContentMounted {
+                expandedSurface(progress: progress)
+            }
+            if !presentation.expanded || progress < 1 {
+                compactSurface(progress: progress)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color.black))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
+            .allowsHitTesting(false))
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .foregroundColor(.white)
+        .preferredColorScheme(.dark)
+        .ignoresSafeArea()
+    }
+
+    private func expandedSurface(progress: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: presentation.cameraHeight)
+            expandedPage(moving: mediaMotionAllowed && presentation.expanded && progress >= 0.99)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if presentation.contentActivity == .sports, let error = dataManager.detailError ?? dataManager.lastError {
+                Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
+            }
+            Button { presentation.collapse() } label: {
+                Capsule().fill(Color.white.opacity(0.32)).frame(width: 34, height: 4)
+                    .frame(maxWidth: .infinity).frame(height: 18).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collapse island")
+            .keyboardShortcut(.cancelAction)
+        }
+        .frame(width: presentation.expandedPanelWidth, height: presentation.expandedPanelHeight, alignment: .top)
+        .opacity(Double(min(1, max(0, (progress - 0.10) / 0.55))))
+        .allowsHitTesting(presentation.expanded && progress > 0.75)
+        .accessibilityHidden(!presentation.expanded)
+    }
+
+    @ViewBuilder private func expandedPage(moving: Bool) -> some View {
+        switch presentation.contentActivity {
+        case .sports:
+            if dataManager.showMatchSelector { MatchSelectorView(dataManager: dataManager) }
+            else if let match = dataManager.activeMatch { expandedView(for: match) }
+            else { emptyState }
+        case .music:
+            VStack(spacing: 4) {
+                NowPlayingExpandedView(manager: nowPlayingManager, animationAllowed: moving)
+                if let error = nowPlayingManager.controlError {
+                    Text(error).font(.caption).foregroundColor(.orange)
+                } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {
+                    Text("This player is not exposing playback controls.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+        case .calendar: NativeCalendarView(manager: calendarManager)
+        case .clock: NativeClockView(manager: clockManager)
+        }
+    }
+
+    private var compactAccessibilityLabel: String {
+        if presentation.selection.primary == .music { return "Expand music: \(nowPlayingManager.currentTrack?.title ?? "Music")" }
+        return "Expand \(presentation.selection.primary?.rawValue ?? "sports") activity"
+    }
+
+    private func compactSurface(progress: CGFloat) -> some View {
+        Button { presentation.open(presentation.selection.primary ?? .sports) } label: {
+            compactPage.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+        .frame(height: compactHeight)
+        .opacity(Double(max(0, 1 - progress / 0.25)))
+        .allowsHitTesting(!presentation.expanded && progress < 0.25)
+        .accessibilityHidden(presentation.expanded)
+        .accessibilityLabel(compactAccessibilityLabel)
+    }
+
+    @ViewBuilder private var compactPage: some View {
+        switch presentation.selection.primary ?? .sports {
+        case .sports: CollapsedScoreView(dataManager: dataManager)
+        case .music: cameraSafeCompact(.music)
+        case .calendar: cameraSafeCompact(.calendar)
+        case .clock: cameraSafeCompact(.clock)
+        }
     }
 
     private var mediaMotionAllowed: Bool {
