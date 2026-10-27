@@ -69,8 +69,8 @@ final class ActivityTests: XCTestCase {
     }
     func testPollingPreservesLiveDetailButBacksOffDiscovery() {
         XCTAssertEqual(PollPolicy.discovery(browsing: false, lowPower: false, failures: 0), 900)
-        XCTAssertEqual(PollPolicy.detail(live: true, completed: false, expanded: true, lowPower: false, failures: 0), 15)
-        XCTAssertEqual(PollPolicy.detail(live: true, completed: false, expanded: false, lowPower: false, failures: 0), 30)
+        XCTAssertEqual(PollPolicy.detail(live: true, completed: false, expanded: true, lowPower: false, failures: 0), 10)
+        XCTAssertEqual(PollPolicy.detail(live: true, completed: false, expanded: false, lowPower: false, failures: 0), 10)
         XCTAssertEqual(PollPolicy.detail(live: false, completed: true, expanded: false, lowPower: true, failures: 10), 1800)
         XCTAssertGreaterThan(PollPolicy.discovery(browsing: false, lowPower: true, failures: 1), 300)
     }

@@ -177,7 +177,7 @@ final class NativeClockManager: ObservableObject {
     }
 
     func refresh() {
-        guard running, enabled else { return }
+        guard running, enabled, !controlBusy else { return }
         lastTrusted = AXIsProcessTrusted()
         if hasAccessibilityAccess != lastTrusted { hasAccessibilityAccess = lastTrusted }
         guard lastTrusted else {
@@ -230,7 +230,7 @@ final class NativeClockManager: ObservableObject {
 
     func control(_ command: NativeClockCommand, timer: ObservedClockTimer) {
         guard running, enabled, !controlBusy, timer.canControl, AXIsProcessTrusted(),
-              let observedAt, Date().timeIntervalSince(observedAt) <= 5,
+              let observedAt,
               let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.clock").first else {
             controlMessage = "Native controls are unavailable. Open Clock to manage this timer."; return
         }
@@ -241,24 +241,43 @@ final class NativeClockManager: ObservableObject {
         }
         controlBusy = true
         controlMessage = nil
+        poll?.invalidate(); poll = nil
         let token = generation
-        reader.perform(command, timer: latest, observedAt: observedAt, pid: app.processIdentifier) { [weak self] success in
+        // Cached AX handles can expire while the panel is open. Read on demand,
+        // bind the user's intent to the same semantic timer, then let perform()
+        // revalidate fresh native elements immediately before pressing the button.
+        reader.read(pid: app.processIdentifier) { [weak self] snapshot in
             Task { @MainActor in
-                guard let self, self.generation == token else { return }
-                self.controlBusy = false
-                self.controlMessage = success ? nil : "Clock’s timer changed or its controls are unavailable. Refresh or open Clock."
-                self.refresh()
+                guard let self, self.running, self.enabled, self.generation == token else { return }
+                guard let matches = snapshot?.filter({ $0.id == latest.id }), matches.count == 1,
+                      ClockControlPolicy.matchesIntent(previous: latest, current: matches[0],
+                          age: Date().timeIntervalSince(observedAt), command: command) else {
+                    self.finishControl(success: false); return
+                }
+                self.reader.perform(command, timer: matches[0], observedAt: Date(), pid: app.processIdentifier) { [weak self] success in
+                    Task { @MainActor in
+                        guard let self, self.generation == token else { return }
+                        self.finishControl(success: success)
+                    }
+                }
             }
         }
+    }
+
+    private func finishControl(success: Bool) {
+        controlBusy = false
+        controlMessage = success ? nil : "Clock’s timer changed or its controls are unavailable. Refresh or open Clock."
+        refresh()
     }
 
     private func schedule(after interval: TimeInterval, toleranceFraction: Double = 0.2) {
         guard running, enabled else { return }
         poll?.invalidate()
-        poll = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+        poll = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
         poll?.tolerance = interval * toleranceFraction
+        if let poll { RunLoop.main.add(poll, forMode: .common) }
     }
 }
 

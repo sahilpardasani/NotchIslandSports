@@ -156,7 +156,15 @@ public enum ClockControlPolicy {
     /// Do not dispatch against a stale/replaced timer or an unexpected pause/resume state.
     public static func accepts(previous: ObservedClockTimer, current: ObservedClockTimer,
                                age: TimeInterval, command: NativeClockCommand) -> Bool {
-        guard age >= 0, age <= 5, previous.canControl, current.canControl,
+        age <= 5 && matchesIntent(previous: previous, current: current, age: age, command: command)
+    }
+
+    /// Revalidate a displayed intent against an on-click read. This never authorizes
+    /// AXPress by itself: dispatch still requires accepts() on fresh observations.
+    public static func matchesIntent(previous: ObservedClockTimer, current: ObservedClockTimer,
+                                     age: TimeInterval, command: NativeClockCommand) -> Bool {
+        guard age.isFinite, age >= 0, previous.remaining.isFinite, current.remaining.isFinite,
+              previous.canControl, current.canControl,
               previous.controlIdentifier == current.controlIdentifier, previous.id == current.id,
               previous.paused == current.paused else { return false }
         let drift = previous.remaining - current.remaining

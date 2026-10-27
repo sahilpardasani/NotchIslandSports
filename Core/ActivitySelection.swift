@@ -51,11 +51,10 @@ public enum PollPolicy {
     }
     public static func detail(live: Bool, completed: Bool, expanded: Bool,
                               lowPower: Bool, failures: Int) -> TimeInterval {
-        let delay = backoff(base: completed ? 900 : (live ? (expanded ? 15 : 30) : 120),
-                            lowPower: lowPower, failures: failures)
-        // A transient provider failure must not leave a selected live score
-        // waiting many minutes after connectivity returns.
-        return live && !completed ? min(lowPower ? 240 : 120, delay) : delay
+        // The selected live score has priority over background power savings.
+        // A failed provider still backs off, but never for minutes at a time.
+        if live && !completed { return min(60, backoff(base: 10, lowPower: false, failures: failures)) }
+        return backoff(base: completed ? 900 : 120, lowPower: lowPower, failures: failures)
     }
     private static func backoff(base: TimeInterval, lowPower: Bool, failures: Int) -> TimeInterval {
         min(1800, base * (lowPower ? 2 : 1) * pow(2, Double(min(4, max(0, failures)))))

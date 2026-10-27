@@ -1,11 +1,15 @@
-# Battery changes — 1.6 build 12
+# Battery changes — 1.6 build 19
+
+Build 19 prioritizes the selected live score: a 10-second polling interval in both compact and expanded views, also in Low Power Mode. This replaces the older 30/15-second schedule below. Polls follow the previous response, so network latency adds to the interval. Errors back off to at most 60 seconds. Background discovery, inactive integrations and hidden animations keep their power savings. Clock commands refresh controls on demand instead of adding an idle polling loop. Actual battery usage has not been measured.
+
+## Earlier background-work improvements (retained)
 
 The app now does less background discovery and avoids UI work for unchanged state. These are reductions in scheduled work, not a measured battery-life percentage. The design and hold/swipe gestures are unchanged.
 
 | Work | Before | Build 12 |
 | --- | --- | --- |
 | Discover all 13 sports with picker closed | Every 5 minutes | Every 15 minutes; 30 in Low Power Mode or serious/critical thermal pressure |
-| Selected live score | 30 seconds collapsed / 15 expanded | Unchanged; existing power/backoff rules retained |
+| Selected live score | 30 seconds collapsed / 15 expanded | Build 19: 10 seconds in either view, including Low Power Mode; bounded error backoff |
 | Open match picker or Refresh Now | Fetch immediately | Unchanged; the full catalog remains available |
 | Brief sleep/wake | Rediscover all sports on every resume | Reuse the completed discovery within its freshness window; refresh selected detail on wake |
 | Clock closed | Check every 15 seconds | No repeating check; application launch/activation reconnects |

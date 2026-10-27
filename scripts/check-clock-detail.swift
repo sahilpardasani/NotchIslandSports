@@ -49,6 +49,17 @@ import IslandCore
         check(ClockTimerParser.selectedDetail(root(card, panel)) == nil, "Larger running drift rejected")
         let replacement = ObservedClockTimer(id: "replacement", remaining: 197, paused: true, controlIdentifier: "selected-detail/replacement")
         check(!ClockControlPolicy.accepts(previous: match.timer, current: replacement, age: 0, command: .resume), "Selection changes reject old click")
+        check(!ClockControlPolicy.accepts(previous: match.timer, current: match.timer, age: 6, command: .resume), "Old snapshot alone cannot authorize a press")
+        check(ClockControlPolicy.matchesIntent(previous: match.timer, current: match.timer, age: 30, command: .resume), "Paused intent can be rebound by an on-click read after waiting")
+        check(ClockControlPolicy.accepts(previous: match.timer, current: match.timer, age: 0.2, command: .resume), "Freshly rebound resume passes dispatch validation")
+        check(!ClockControlPolicy.matchesIntent(previous: match.timer, current: replacement, age: 30, command: .resume), "Refresh never retargets another timer")
+        let resumed = ObservedClockTimer(id: id, remaining: 190, paused: false, controlIdentifier: match.timer.controlIdentifier)
+        check(!ClockControlPolicy.matchesIntent(previous: match.timer, current: resumed, age: 30, command: .resume), "External resume invalidates an old resume click")
+        let reset = ObservedClockTimer(id: id, remaining: 300, paused: true, controlIdentifier: match.timer.controlIdentifier)
+        check(!ClockControlPolicy.matchesIntent(previous: match.timer, current: reset, age: 30, command: .resume), "Changed paused duration invalidates an old click")
+        check(!ClockControlPolicy.matchesIntent(previous: match.timer, current: match.timer, age: .infinity, command: .resume), "Invalid observation time cannot authorize intent")
+        let unavailable = ObservedClockTimer(id: id, remaining: 197, paused: true)
+        check(!ClockControlPolicy.matchesIntent(previous: match.timer, current: unavailable, age: 30, command: .resume), "Fresh read without proven controls cannot authorize a click")
         // Sidebar observation must not require Cancel in the same card, or a
         // selected flag. Current Clock shows that control in the separate pane.
         card = selected; card.selected = false

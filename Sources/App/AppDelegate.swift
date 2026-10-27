@@ -225,6 +225,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
     @objc private func filterSport(_ sender: NSMenuItem) {
         if let sport = sender.representedObject as? SportType {
             dataManager.selectedSportFilter = sport
+            if dataManager.filteredMatches.isEmpty { dataManager.requestDiscovery() }
+            presentation.showSelectedSport()
         }
     }
     

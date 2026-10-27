@@ -99,6 +99,13 @@ final class IslandPresentation: ObservableObject {
         if next != selection { selection = next }
         open(activity)
     }
+    /// Explicit sport selection leaves a media/calendar browse page without
+    /// changing whether the island is expanded or merging companion activities.
+    func showSelectedSport() {
+        compactMedia = false; compactCalendar = false
+        if selectedTab != .sports { selectedTab = .sports }
+        if expanded { closingTab = nil }
+    }
     /// Calendar stays reachable even when empty or disconnected, without displacing live slots.
     func cyclePrimary(forward: Bool = true) {
         let pages = IslandActivity.allCases.filter { activity in

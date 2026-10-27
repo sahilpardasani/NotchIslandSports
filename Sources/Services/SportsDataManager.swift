@@ -328,6 +328,7 @@ class SportsDataManager: ObservableObject {
     @Published var lastError: String?
     @Published var selectedSportFilter: SportType? = nil {
         didSet {
+            guard selectedSportFilter != oldValue else { return }
             autoSelectActiveMatch()
         }
     }
@@ -431,7 +432,9 @@ class SportsDataManager: ObservableObject {
     }
     #endif
 
-    init(detailLoader: ((AnyMatch) async throws -> AnyMatch)? = nil) {
+    private let selectionDefaults: UserDefaults
+    init(selectionDefaults: UserDefaults = .standard, detailLoader: ((AnyMatch) async throws -> AnyMatch)? = nil) {
+        self.selectionDefaults = selectionDefaults
         self.detailLoader = detailLoader
         #if DEBUG
         if shouldRunMockData() {
@@ -493,15 +496,17 @@ class SportsDataManager: ObservableObject {
 
     private func scheduleDetail(after delay: TimeInterval? = nil) {
         guard isPolling else { return }
+        let existingDeadline = detailTimer?.isValid == true ? detailTimer?.fireDate : nil
         detailTimer?.invalidate()
         guard activeMatch != nil else { detailTimer = nil; return }
         let interval = delay ?? PollPolicy.detail(live: activeMatch?.isLive == true,
             completed: activeMatch?.isCompleted == true, expanded: isExpanded,
             lowPower: lowPowerMode, failures: detailFailures)
-        detailTimer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
+        let nextDelay = min(interval, existingDeadline.map { max(0.01, $0.timeIntervalSinceNow) } ?? interval)
+        detailTimer = Timer(timeInterval: nextDelay, repeats: false) { [weak self] _ in
             Task { @MainActor in await self?.fetchActiveMatchDetail() }
         }
-        detailTimer?.tolerance = interval * 0.1
+        detailTimer?.tolerance = activeMatch?.isLive == true ? min(0.25, nextDelay * 0.1) : nextDelay * 0.1
         if let detailTimer { RunLoop.main.add(detailTimer, forMode: .common) }
     }
 
@@ -517,8 +522,9 @@ class SportsDataManager: ObservableObject {
 
     func refresh() async {
         guard !suspended else { return }
-        await fetchAllMatches()
+        async let catalog: Void = fetchAllMatches()
         await fetchActiveMatchDetail()
+        await catalog
     }
 
     func fetchAllMatches() async {
@@ -539,6 +545,7 @@ class SportsDataManager: ObservableObject {
     func fetchActiveMatchDetail() async {
         guard !suspended, !isUsingMockData else { return }
         if let detailTask { await detailTask.value; return }
+        detailTimer?.invalidate(); detailTimer = nil
         let requestID = UUID()
         detailRequestID = requestID
         let generation = lifecycleGeneration.value
@@ -937,10 +944,10 @@ class SportsDataManager: ObservableObject {
 
     func clearActiveMatch() {
         activeMatch = nil
-        UserDefaults.standard.removeObject(forKey: StorageKeys.activeMatchId)
-        UserDefaults.standard.removeObject(forKey: StorageKeys.activeMatchSport)
-        UserDefaults.standard.removeObject(forKey: StorageKeys.activeMatchLeague)
-        UserDefaults.standard.removeObject(forKey: StorageKeys.activeMatchIsWTA)
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchId)
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchSport)
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchLeague)
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchIsWTA)
         logger.info("Cleared active match")
     }
 
@@ -1016,6 +1023,7 @@ class SportsDataManager: ObservableObject {
             }
 
             }
+            guard updatedMatch.sportType == match.sportType, updatedMatch.id == match.id else { throw NetworkError.noData }
             guard !Task.isCancelled, lifecycleGeneration.accepts(generation),
                   selectionGeneration.accepts(selection), activeMatch?.identity == match.identity else { return }
             activeMatch = updatedMatch
@@ -1040,30 +1048,32 @@ class SportsDataManager: ObservableObject {
     // MARK: - Persistence
 
     private func persistActiveMatch(_ match: AnyMatch) {
-        UserDefaults.standard.set(match.id, forKey: StorageKeys.activeMatchId)
-        UserDefaults.standard.set(match.sportType.rawValue, forKey: StorageKeys.activeMatchSport)
+        selectionDefaults.set(match.id, forKey: StorageKeys.activeMatchId)
+        selectionDefaults.set(match.sportType.rawValue, forKey: StorageKeys.activeMatchSport)
 
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchLeague)
+        selectionDefaults.removeObject(forKey: StorageKeys.activeMatchIsWTA)
         switch match {
         case .soccer(let m):
-            UserDefaults.standard.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
+            selectionDefaults.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
         case .tennis(let m):
-            UserDefaults.standard.set(m.isWTA, forKey: StorageKeys.activeMatchIsWTA)
+            selectionDefaults.set(m.isWTA, forKey: StorageKeys.activeMatchIsWTA)
         case .lacrosse(let m):
-            UserDefaults.standard.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
+            selectionDefaults.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
         case .volleyball(let m):
-            UserDefaults.standard.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
+            selectionDefaults.set(m.leagueSlug, forKey: StorageKeys.activeMatchLeague)
         default:
             break
         }
     }
 
     private func restoreActiveMatch() {
-        guard let matchId = UserDefaults.standard.string(forKey: StorageKeys.activeMatchId) else {
+        guard let matchId = selectionDefaults.string(forKey: StorageKeys.activeMatchId) else {
             return
         }
 
-        let sport = UserDefaults.standard.string(forKey: StorageKeys.activeMatchSport)
-        let league = UserDefaults.standard.string(forKey: StorageKeys.activeMatchLeague)
+        let sport = selectionDefaults.string(forKey: StorageKeys.activeMatchSport)
+        let league = selectionDefaults.string(forKey: StorageKeys.activeMatchLeague)
         if let found = allMatches.first(where: {
             guard $0.id == matchId, sport == nil || $0.sportType.rawValue == sport else { return false }
             if let league { return $0.identity.contains(":\(league):") }
@@ -1075,6 +1085,11 @@ class SportsDataManager: ObservableObject {
     }
 
     private func autoSelectActiveMatch() {
+        // A sport choice is a display choice, not just a picker filter. Never keep
+        // the previous sport's match while selecting from the new sport's feed.
+        if let filter = selectedSportFilter, let current = activeMatch, current.sportType != filter {
+            clearActiveMatch()
+        }
         // If there's an active match, keep it unless it has expired (completed and older than 48 hours).
         if let current = activeMatch {
             if let found = allMatches.first(where: { $0.identity == current.identity }) {

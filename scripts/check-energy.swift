@@ -29,8 +29,8 @@ import IslandCore
         check(!EnergyPolicy.discoveryNeeded(age: 900, browsing: false, lowPower: true), "Power saving discovery backs off")
         check(EnergyPolicy.discoveryNeeded(age: 120, browsing: true, lowPower: false), "Browsing keeps freshness")
         check(PollPolicy.discovery(browsing: false, lowPower: false, failures: 0) == 900, "Four background sweeps per hour")
-        check(PollPolicy.detail(live: true, completed: false, expanded: false, lowPower: false, failures: 0) == 30, "Live score unchanged")
-        check(PollPolicy.detail(live: true, completed: false, expanded: true, lowPower: false, failures: 0) == 15, "Expanded score unchanged")
+        check(PollPolicy.detail(live: true, completed: false, expanded: false, lowPower: false, failures: 0) == 10, "Live score refreshes every ten seconds")
+        check(PollPolicy.detail(live: true, completed: false, expanded: true, lowPower: false, failures: 0) == 10, "Expanded score refreshes every ten seconds")
 
         let model = NowPlayingManager()
         var publications = 0

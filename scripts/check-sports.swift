@@ -21,9 +21,15 @@ import IslandCore
         check(SportsRequestPolicy.request(board, fresh: true).value(forHTTPHeaderField: "Cache-Control") == "no-cache", "Tennis selected scoreboard requests server revalidation")
         check(!SportsRequestPolicy.isSelectedDetail(board) && SportsRequestPolicy.isSelectedDetail(summary), "Selected score uses reserved network lane")
         check(SportsRequestPolicy.request(board).cachePolicy == .useProtocolCachePolicy, "Unselected catalog keeps cache efficiency")
-        check(PollPolicy.detail(live:true,completed:false,expanded:false,lowPower:false,failures:99) == 120, "Live retry never backs off beyond two minutes")
-        check(PollPolicy.detail(live:true,completed:false,expanded:false,lowPower:true,failures:99) == 240, "Low-power retry remains bounded")
+        check(PollPolicy.detail(live:true,completed:false,expanded:false,lowPower:false,failures:99) == 60, "Live retry never backs off beyond one minute")
+        check(PollPolicy.detail(live:true,completed:false,expanded:false,lowPower:true,failures:99) == 60, "Low-power retry remains bounded")
         check(PollPolicy.detail(live:false,completed:true,expanded:false,lowPower:false,failures:0) == 900, "Finished matches stay battery-efficient")
+        for expanded in [false, true] {
+            for lowPower in [false, true] {
+                check(PollPolicy.detail(live:true, completed:false, expanded:expanded, lowPower:lowPower, failures:0) == 10,
+                    "Selected live score stays fast across presentation and power modes")
+            }
+        }
         func tennis(_ id: String, home: Int, state: String = "in") -> [String: Any] {
             ["id": id, "date": "2026-10-27T12:00Z", "status": ["type": ["state": state, "description": "Live"]],
              "competitors": [
@@ -70,6 +76,53 @@ import IslandCore
             manager.stopPolling()
             check(manager.detailFixtureDeadline == nil, "Sleep stops automatic score work")
         }
+        let suite = "SportsSelectionChecks." + UUID().uuidString
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        var loadedSports: [SportType] = []
+        let switching = SportsDataManager(selectionDefaults: preferences) { match in
+            loadedSports.append(match.sportType); return match
+        }
+        switching.allMatches = MockDataProvider.getMockMatches()
+        switching.beginDetailFixture(switching.allMatches.last!)
+        for sport in SportType.allCases {
+            switching.selectedSportFilter = sport
+            check(switching.activeMatch?.sportType == sport, "Sport filter immediately changes displayed \(sport.rawValue)")
+            for _ in 0..<100 where loadedSports.last != sport { try await Task.sleep(nanoseconds: 1_000_000) }
+            check(loadedSports.last == sport, "Sport selection immediately uses its own detail provider")
+        }
+        switching.stopPolling()
+        switching.allMatches = switching.allMatches.filter { $0.sportType == .tennis }
+        switching.selectedSportFilter = .cricket
+        check(switching.activeMatch == nil, "Empty selected sport cannot leave another sport's score displayed")
+        switching.selectedSportFilter = .tennis
+        check(switching.activeMatch?.sportType == .tennis, "Available sport recovers immediately after empty selection")
+        switching.selectedSportFilter = nil
+        check(switching.activeMatch?.sportType == .tennis, "All Sports preserves the explicit selected match")
+
+        let samples = MockDataProvider.getMockMatches()
+        let cricket = samples.first { $0.sportType == .cricket }!
+        let tennisMatch = samples.first { $0.sportType == .tennis }!
+        var oldResponse: CheckedContinuation<AnyMatch, Never>?
+        let racing = SportsDataManager(selectionDefaults: preferences) { match in
+            if match.identity == cricket.identity {
+                return await withCheckedContinuation { oldResponse = $0 }
+            }
+            return match
+        }
+        racing.allMatches = [cricket, tennisMatch]
+        racing.beginDetailFixture(cricket)
+        let oldTask = Task { await racing.fetchActiveMatchDetail() }
+        for _ in 0..<100 where oldResponse == nil { try await Task.sleep(nanoseconds: 1_000_000) }
+        precondition(oldResponse != nil)
+        racing.selectedSportFilter = .tennis
+        for _ in 0..<100 where racing.lastDetailUpdate == nil { try await Task.sleep(nanoseconds: 1_000_000) }
+        check(racing.activeMatch?.identity == tennisMatch.identity && racing.lastDetailUpdate != nil,
+            "New sport refresh does not wait for old in-flight provider")
+        oldResponse?.resume(returning: cricket)
+        await oldTask.value
+        check(racing.activeMatch?.identity == tennisMatch.identity, "Late cricket response cannot overwrite selected tennis")
+        racing.stopPolling()
         print("Passed \(count) sports refresh checks; fixtures exercise real parsers and timer callbacks, not live score latency.")
     }
 }

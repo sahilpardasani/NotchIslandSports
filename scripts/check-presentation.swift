@@ -190,6 +190,14 @@ import IslandCore
         model.collapse()
         check(model.showsSecondary && model.showsTertiary && model.selection == companionSlots, "Closing Clock returns both pills without reordering")
         withExtendedLifetime(subscription) {}
+        let sportChoice = IslandPresentation(defaults: defaults)
+        sportChoice.update(sports: true, music: true, clock: true)
+        sportChoice.cyclePrimary()
+        sportChoice.showSelectedSport()
+        check(sportChoice.collapsedActivity == .sports && !sportChoice.expanded, "Explicit sport choice leaves compact media without expanding")
+        sportChoice.open(.music)
+        sportChoice.showSelectedSport()
+        check(sportChoice.selectedTab == .sports && sportChoice.expanded, "Explicit sport choice replaces expanded media with the scorecard")
         print("Passed \(count) presentation checks, including persistent merge, Calendar browsing and no repeated layout publications.")
     }
 }
