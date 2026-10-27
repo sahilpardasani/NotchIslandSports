@@ -177,7 +177,7 @@ final class NotchPanelController {
         if dataManager.showMatchSelector { return 330 }
         guard let match = dataManager.activeMatch else { return 280 }
         switch match {
-        case .cricket: return 320
+        case .cricket: return 284
         case .tennis: return 210
         case .soccer: return 220
         case .lacrosse: return 180

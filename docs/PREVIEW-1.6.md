@@ -1,9 +1,13 @@
-# Preview 1.6 (build 14) — faster media and concise approvals
+# Preview 1.6 (build 15) — cleaner cricket scorecard
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 14 clean action labels (current)
+## Build 15 cricket footer cleanup (current)
+
+Removed the bottom match-description info strip (including season labels such as “2026/27”) from live and completed cricket scorecards. The expanded cricket panel is 36 points shorter. Scores, batting/bowling statistics, partnership, run rates, language control, match results and active break notices remain. Version is 1.6.0, bundle/About build 15.
+
+## Build 14 clean action labels retained
 
 ChatGPT requests now describe the requested action instead of showing internal tool names. For example, a GitHub tree request displays “Prepare 20 file changes · sahilpardasani/NotchIslandSports”. Commit, branch update, force-update and pull-request actions have distinct labels. Unknown integrations retain their service/operation with technical separators removed. The one-line layout and on-demand full Details remain. The user’s screenshot confirms a real Codex request reached the earlier UI; response round-trip and source-to-screen latency are still unmeasured. Version is 1.6.0, bundle/About build 14.
 
