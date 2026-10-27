@@ -36,7 +36,7 @@ final class NowPlayingManager: ObservableObject {
             if enabled && isActive { updateNowPlayingInfo() }
             else {
                 adapter.stop(); adapterRetry?.cancel(); adapterRetry = nil
-                timer?.invalidate(); timeout?.cancel(); requestID = nil; currentTrack = nil
+                timer?.invalidate(); timeout?.cancel(); requestID = nil; clearSession()
                 commandProcess?.terminate(); commandProcess = nil
             }
         }
@@ -56,6 +56,8 @@ final class NowPlayingManager: ObservableObject {
     
     // MARK: - Private Properties
     
+    private var sessionPresence = MediaSessionPresence()
+    private var terminationObserver: NSObjectProtocol?
     private let adapter = SystemMediaAdapter()
     private var adapterRetry: DispatchWorkItem?
     private var timer: Timer?
@@ -69,6 +71,7 @@ final class NowPlayingManager: ObservableObject {
         adapter.onSnapshot = { [weak self] snapshot in self?.accept(snapshot) }
         adapter.onFailure = { [weak self] in
             guard let self, self.isActive, self.enabled else { return }
+            self.clearSession()
             self.controlError = "Media connection unavailable. Retrying automatically."
             let retry = DispatchWorkItem { [weak self] in self?.updateNowPlayingInfo() }
             self.adapterRetry = retry
@@ -111,13 +114,24 @@ final class NowPlayingManager: ObservableObject {
     func startPolling() {
         guard !isActive else { return }
         isActive = true
+        terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
+                let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                Task { @MainActor in
+                    guard let self, let bundle = app?.bundleIdentifier,
+                          bundle == self.currentTrack?.sourceBundleID else { return }
+                    self.clearSession()
+                }
+            }
         updateNowPlayingInfo()
     }
 
     func stopPolling() {
         isActive = false
+        if let terminationObserver { NSWorkspace.shared.notificationCenter.removeObserver(terminationObserver) }
+        terminationObserver = nil
         adapter.stop(); adapterRetry?.cancel(); adapterRetry = nil
-        currentTrack = nil
+        clearSession()
         timer?.invalidate(); timer = nil
         timeout?.cancel(); timeout = nil
         requestID = nil
@@ -148,7 +162,7 @@ final class NowPlayingManager: ObservableObject {
         let timeout = DispatchWorkItem { [weak self] in
             guard let self, self.requestID == token else { return }
             self.requestID = nil
-            self.currentTrack = nil
+            self.clearSession()
             self.scheduleNext()
         }
         self.timeout = timeout
@@ -161,7 +175,7 @@ final class NowPlayingManager: ObservableObject {
                 defer { self.scheduleNext() }
                 guard self.isActive, self.enabled, let info,
                       let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String, !title.isEmpty else {
-                    self.currentTrack = nil; return
+                    self.clearSession(); return
                 }
                 let rate = info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0
                 let duration = info["kMRMediaRemoteNowPlayingInfoDuration"] as? Double ?? 0
@@ -180,6 +194,9 @@ final class NowPlayingManager: ObservableObject {
                     duration: duration, elapsedTime: position, isPlaying: rate > 0,
                     artwork: artwork, dominantColor: self.lastColor,
                     sourceBundleID: pid > 0 ? NSRunningApplication(processIdentifier: pid)?.bundleIdentifier : nil)
+                guard self.sessionPresence.update(bundleID: track.sourceBundleID, title: track.title, playing: track.isPlaying) else {
+                    self.clearSession(); return
+                }
                 if self.currentTrack != track { self.currentTrack = track }
             }
         }
@@ -188,7 +205,10 @@ final class NowPlayingManager: ObservableObject {
 
     private func accept(_ snapshot: MediaSnapshot?) {
         guard isActive, enabled else { return }
-        guard let snapshot else { currentTrack = nil; return }
+        guard let snapshot,
+              !NSRunningApplication.runningApplications(withBundleIdentifier: snapshot.bundleID).isEmpty,
+              sessionPresence.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: snapshot.playing)
+        else { clearSession(); return }
         controlError = nil
         if snapshot.artwork != lastArtwork {
             lastArtwork = snapshot.artwork
@@ -202,6 +222,13 @@ final class NowPlayingManager: ObservableObject {
             duration: snapshot.duration, elapsedTime: position, isPlaying: snapshot.playing,
             artwork: snapshot.artwork, dominantColor: lastColor, sourceBundleID: snapshot.bundleID)
         if currentTrack != track { currentTrack = track }
+    }
+
+    private func clearSession() {
+        sessionPresence.clear()
+        if currentTrack != nil { currentTrack = nil }
+        artworkImage = nil; lastArtwork = nil
+        positionAnchor = PlaybackAnchor(position: 0, instant: 0, rate: 0, duration: 0)
     }
 
     // MARK: - Dominant Color Extraction

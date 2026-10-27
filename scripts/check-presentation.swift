@@ -68,6 +68,22 @@ import IslandCore
               "A newly observed browser video splits from the existing sports activity")
         model.open(.music)
         check(model.expanded && model.selectedTab == .music, "Media satellite opens its control panel")
+        model.expandedContentMounted = true
+        model.open(.clock)
+        model.collapse()
+        check(model.contentActivity == .clock && model.expandedContentMounted, "Closing retains the visible page instead of flashing the primary")
+        model.open(.music)
+        check(model.contentActivity == .music && model.expanded, "Reversing a close uses the new page")
+        model.finishResize()
+        check(model.expandedContentMounted, "A stale close must not unmount a reopened panel")
+        model.collapse(); model.finishResize()
+        check(!model.expandedContentMounted && model.closingTab == nil, "Settled collapse releases expanded content")
+        model.open(.music)
+        model.update(sports: true, music: false, clock: false)
+        check(!model.expanded && !model.showsSecondary && model.selection.primary == .sports, "Session ending merges and closes the media panel")
+        model.setMerged(true)
+        model.update(sports: true, music: true, clock: false)
+        check(model.showsSecondary && model.selection.secondary == .music, "A new playback session splits again after the previous session was merged")
         withExtendedLifetime(subscription) {}
         print("Passed \(count) presentation checks, including persistent merge, Calendar browsing and no repeated layout publications.")
     }

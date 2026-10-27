@@ -9,6 +9,14 @@ final class IslandPresentation: ObservableObject {
     @Published var selectedTab: IslandActivity = .sports
     @Published var cameraHeight: CGFloat = 0
     @Published var expandedPanelHeight: CGFloat = 520
+    @Published var expandedPanelWidth: CGFloat = 600
+    @Published var expandedContentMounted = false
+    @Published private(set) var closingTab: IslandActivity?
+    var contentActivity: IslandActivity { expanded ? selectedTab : (closingTab ?? selectedTab) }
+    func finishResize() {
+        expandedContentMounted = expanded
+        if !expanded { closingTab = nil }
+    }
     @Published var expanded = false
     @Published var pinned = false
     @Published var suspended = false
@@ -25,6 +33,8 @@ final class IslandPresentation: ObservableObject {
     var showsTertiary: Bool { !merged && selection.tertiary != nil }
 
     func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false) {
+        let musicEnded = available.contains(.music) && !music
+        let musicStarted = !available.contains(.music) && music
         available = []
         if sports { available.insert(.sports) }
         if music { available.insert(.music) }
@@ -33,11 +43,14 @@ final class IslandPresentation: ObservableObject {
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }
+        if musicStarted { setMerged(false) }
+        if musicEnded, expanded, selectedTab == .music { collapse() }
         if !expanded, selectedTab != (next.primary ?? .sports) { selectedTab = next.primary ?? .sports }
     }
     func open(_ activity: IslandActivity, pin: Bool = true) {
         if selectedTab != activity { selectedTab = activity }
         if pinned != pin { pinned = pin }
+        closingTab = nil
         if !expanded { expanded = true }
     }
     func promote(_ activity: IslandActivity) {
@@ -78,7 +91,7 @@ final class IslandPresentation: ObservableObject {
     }
     func collapse() {
         if pinned { pinned = false }
-        if expanded { expanded = false }
+        if expanded { closingTab = selectedTab; expanded = false }
         let activity = selection.primary ?? .sports
         if selectedTab != activity { selectedTab = activity }
     }

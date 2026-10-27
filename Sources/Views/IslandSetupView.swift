@@ -1,5 +1,6 @@
 import SwiftUI
 import ApplicationServices
+import IslandCore
 
 /// Shown once; always reachable again through About → Configure.
 struct IslandSetupView: View {
@@ -21,15 +22,25 @@ struct IslandSetupView: View {
             Text("Shows the system’s current player, including supported browser videos. Uses an experimental macOS media integration.")
                 .font(.caption).foregroundColor(.secondary)
             VStack(alignment: .leading, spacing: 6) {
-                Toggle("Apple Clock timers", isOn: Binding(get: { clock.enabled }, set: { enabled in
-                    if enabled { clock.requestPermission() } else { clock.enabled = false }
-                }))
-                Text(clock.status).font(.caption).foregroundColor(.secondary)
+                if !clock.setupChoiceMade {
+                    Text("Apple Clock timers")
+                    HStack {
+                        Button("Connect Apple Clock…") { clock.requestPermission() }
+                        Button("Skip Clock") { clock.enabled = false }
+                    }
+                } else {
+                    Toggle("Apple Clock timers", isOn: Binding(get: { clock.enabled }, set: { enabled in
+                        if enabled { clock.requestPermission() } else { clock.enabled = false }
+                    }))
+                }
+                Text(clock.setupState.label).font(.caption).foregroundColor(clock.configurationReady ? .secondary : .orange)
+                if let failure = clock.setupFailure { Text(failure).font(.caption).foregroundColor(.secondary) }
                 Text("Keep Clock open on Timers. Native timer controls depend on Clock’s accessible interface; no timers are created here.")
                     .font(.caption).foregroundColor(.secondary)
                 if clock.enabled {
                     HStack {
-                        if !AXIsProcessTrusted() { Button("Allow Accessibility…") { clock.requestPermission() } }
+                        if !clock.hasAccessibilityAccess { Button("Allow Accessibility…") { clock.requestPermission() } }
+                        else if !clock.configurationReady && !clock.setupInProgress { Button("Retry connection") { clock.requestPermission() } }
                         Button("Open Clock") { clock.openClock() }
                     }
                 }
@@ -50,7 +61,7 @@ struct IslandSetupView: View {
             HStack {
                 Text("Change these later in About → Configure.").font(.caption).foregroundColor(.secondary)
                 Spacer()
-                Button("Done", action: done).keyboardShortcut(.defaultAction)
+                Button("Done", action: done).keyboardShortcut(.defaultAction).disabled(!clock.configurationReady)
             }
         }.padding(26).frame(width: 490, height: 600)
     }

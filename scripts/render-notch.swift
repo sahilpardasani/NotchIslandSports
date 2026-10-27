@@ -11,14 +11,14 @@ import IslandCore
         data.activeMatch = MockDataProvider.getMockMatches().first { $0.sportType == .cricket }
         let calendar = CalendarManager.visualFixture()
         let media = NowPlayingManager()
-        media.currentTrack = NowPlayingTrack(title: "Preview track", artist: "Synthetic fixture", album: "", duration: 180,
-            elapsedTime: 30, isPlaying: true, artwork: nil, dominantColor: .purple)
+        media.currentTrack = NowPlayingTrack(title: "iOS 27.2 is Out! — What’s New and Everything You Need to Know", artist: "Synthetic fixture", album: "", duration: 180,
+            elapsedTime: 30, isPlaying: true, artwork: nil, dominantColor: .purple, sourceBundleID: "com.apple.Music")
         let suite = "NotchRender." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
@@ -30,12 +30,17 @@ import IslandCore
             presentation.cameraHeight = 32
             presentation.update(sports: true, music: true, clock: true, calendar: true)
             if let activity { presentation.open(activity) }
+            if name == "notch-media-primary" {
+                presentation.update(sports: true, music: true, clock: false)
+                presentation.promote(.music); presentation.collapse(); presentation.finishResize()
+            }
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 220 : 360,
+                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
+            if activity != nil { presentation.expandedPanelWidth = geometry.primary.width }
             if name == "notch-merged" { presentation.mergeActivities() }
             let canvasHeight = activity == nil ? 100.0 : geometry.primary.height + 60
             let view = ZStack(alignment: .topLeading) {

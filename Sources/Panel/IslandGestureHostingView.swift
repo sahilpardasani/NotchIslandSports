@@ -5,7 +5,7 @@ import SwiftUI
 final class IslandGestureHostingView<Content: View>: NSHostingView<Content> {
     var onScrollPull: (() -> Void)?
     var onScrollPush: (() -> Void)?
-    var onHorizontalSwipe: ((Bool) -> Void)?
+    var onHorizontalSwipe: ((Bool, Bool) -> Void)?
     var swipeHeaderHeight: CGFloat = 92
     private var scrollSwipe: CGFloat = 0
     private var swiped = false
@@ -20,7 +20,7 @@ final class IslandGestureHostingView<Content: View>: NSHostingView<Content> {
            abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
             scrollSwipe += event.scrollingDeltaX
             if !swiped, abs(scrollSwipe) > 24 {
-                onHorizontalSwipe?(scrollSwipe < 0)
+                onHorizontalSwipe?(scrollSwipe < 0, NSEvent.pressedMouseButtons & 1 != 0)
                 swiped = true
             }
             if event.phase.isEmpty || event.phase == .ended || event.phase == .cancelled {

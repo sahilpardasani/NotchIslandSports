@@ -259,7 +259,9 @@ extern void adapter_stream() {
       g_mediaRemote.getNowPlayingApplicationPID(
           g_serialdispatchQueue, ^(int pid) {
             if (pid == 0) {
-                liveData[kMRAProcessIdentifier] = nil;
+                // NotchIslandSports: no current player must withdraw the old
+                // title/bundle too, otherwise a closed browser session lingers.
+                [liveData removeAllObjects];
                 handle();
                 return;
             }

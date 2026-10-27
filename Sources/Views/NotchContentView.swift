@@ -94,19 +94,23 @@ struct NotchContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+      GeometryReader { geometry in
+        let compactHeight = max(1, presentation.cameraHeight > 0 ? presentation.cameraHeight : 33)
+        let progress = min(1, max(0, (geometry.size.height - compactHeight) / max(1, presentation.expandedPanelHeight - compactHeight)))
         ZStack(alignment: .top) {
-            if presentation.expanded {
+            if presentation.expanded || presentation.expandedContentMounted {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: presentation.cameraHeight)
                     Group {
-                        switch presentation.selectedTab {
+                        switch presentation.contentActivity {
                         case .sports:
                             if dataManager.showMatchSelector { MatchSelectorView(dataManager: dataManager) }
                             else if let match = dataManager.activeMatch { expandedView(for: match) }
                             else { emptyState }
                         case .music:
                             VStack(spacing: 4) {
-                                NowPlayingExpandedView(manager: nowPlayingManager)
+                                NowPlayingExpandedView(manager: nowPlayingManager,
+                                    animationAllowed: mediaMotionAllowed && presentation.expanded && progress >= 0.99)
                                 if let error = nowPlayingManager.controlError {
                                     Text(error).font(.caption).foregroundColor(.orange)
                                 } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {
@@ -118,7 +122,7 @@ struct NotchContentView: View {
                         case .clock: NativeClockView(manager: clockManager)
                         }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if presentation.selectedTab == .sports, let error = dataManager.detailError ?? dataManager.lastError {
+                    if presentation.contentActivity == .sports, let error = dataManager.detailError ?? dataManager.lastError {
                         Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
                     }
                     Button { presentation.collapse() } label: {
@@ -129,9 +133,12 @@ struct NotchContentView: View {
                     .accessibilityLabel("Collapse island")
                     .keyboardShortcut(.cancelAction)
                 }
-                .frame(height: presentation.expandedPanelHeight)
-                .transition(.opacity)
-            } else {
+                .frame(width: presentation.expandedPanelWidth, height: presentation.expandedPanelHeight, alignment: .top)
+                .opacity(min(1, max(0, (progress - 0.10) / 0.55)))
+                .allowsHitTesting(presentation.expanded && progress > 0.75)
+                .accessibilityHidden(!presentation.expanded)
+            }
+            if !presentation.expanded || progress < 1 {
                 Button {
                     presentation.open(presentation.selection.primary ?? .sports)
                 } label: {
@@ -145,11 +152,14 @@ struct NotchContentView: View {
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .buttonStyle(.plain)
-                .transition(.opacity)
-                .accessibilityLabel("Expand \(presentation.selection.primary?.rawValue ?? "sports") activity")
+                .frame(height: compactHeight)
+                .opacity(max(0, 1 - progress / 0.25))
+                .allowsHitTesting(!presentation.expanded && progress < 0.25)
+                .accessibilityHidden(presentation.expanded)
+                .accessibilityLabel(presentation.selection.primary == .music ? "Expand music: \(nowPlayingManager.currentTrack?.title ?? "Music")" : "Expand \(presentation.selection.primary?.rawValue ?? "sports") activity")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
         .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous).fill(Color.black))
         .overlay(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous)
             .strokeBorder(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
@@ -158,10 +168,18 @@ struct NotchContentView: View {
         .foregroundColor(.white)
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
-        .animation(reduceMotion || presentation.reduceMotion || presentation.lowPower || presentation.suspended ? nil : .easeInOut(duration: 0.18), value: presentation.expanded)
+      }
+        // Window-frame motion is the sole animator; avoid a second SwiftUI layout spring.
+        .transaction { $0.animation = nil }
         .transaction { if reduceMotion || presentation.reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
         .modifier(IslandSwipeGesture(presentation: presentation, headerOnly: true))
         .onExitCommand { presentation.collapse() }
+    }
+
+    private var mediaMotionAllowed: Bool {
+        MediaMotion.allowed(playing: nowPlayingManager.currentTrack?.isPlaying == true,
+            active: nowPlayingManager.isActive, visible: !presentation.suspended,
+            reduceMotion: reduceMotion || presentation.reduceMotion, lowPower: presentation.lowPower)
     }
 
     private func cameraSafeCompact(_ activity: IslandActivity) -> some View {
@@ -169,9 +187,13 @@ struct NotchContentView: View {
             HStack(spacing: 6) {
                 Image(systemName: activity == .music ? "music.note" : activity == .clock ? "timer" : "calendar")
                     .foregroundColor(activity == .clock ? .orange : .cyan)
-                Text(activity == .music ? (nowPlayingManager.currentTrack?.title ?? "Music") :
-                     activity == .clock ? "Apple Clock" : (calendarManager.currentEvent?.title ?? "Calendar"))
-                    .font(.system(size: 11, weight: .semibold))
+                if activity == .music {
+                    ScrollingMediaTitle(title: nowPlayingManager.currentTrack?.title ?? "Music",
+                        moving: mediaMotionAllowed && !presentation.expanded)
+                } else {
+                    Text(activity == .clock ? "Apple Clock" : (calendarManager.currentEvent?.title ?? "Calendar"))
+                        .font(.system(size: 11, weight: .semibold))
+                }
             }
         } right: {
             Group {
@@ -180,8 +202,8 @@ struct NotchContentView: View {
                     Text(event.allDay ? "All day" : event.start.formatted(date: .omitted, time: .shortened))
                         .font(.system(size: 11, weight: .semibold)).foregroundColor(.cyan)
                 } else {
-                    Text(nowPlayingManager.currentTrack?.artist ?? "")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
+                    DynamicIslandWaveform(isPlaying: nowPlayingManager.currentTrack?.isPlaying == true,
+                        color: .cyan, barCount: 5, animationAllowed: mediaMotionAllowed && !presentation.expanded)
                 }
             }
         }

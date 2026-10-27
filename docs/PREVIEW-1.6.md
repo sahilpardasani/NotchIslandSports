@@ -1,6 +1,20 @@
-# Preview 1.6 — gesture-only island and media compatibility
+# Preview 1.6 (build 8) — compact layout, smooth reveal and explicit Clock setup
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
+
+
+## Build 8 fixes
+
+Version stays 1.6.0; CFBundleVersion is 8 and About identifies build 8. This replaces the earlier 1.6 package.
+
+- The compact primary is now camera width + 224 points (404 points with a 180-point camera), with satellites capped at 96 points. The physical camera remains centered and every capsule stays inside the camera/menu-bar band. This leaves more room for the app menu; third-party overlays cannot reserve menu-bar space across every possible app/menu configuration.
+- Sports satellites show score only, stripping parenthesized overs/target commentary. Their labels are explicitly constrained and clipped to their capsules. Full score details remain in the expanded sports page.
+- A single native frame transition reveals a fixed-size expanded surface. Expanded content no longer springs/reflows at a different speed from the window. Opacity follows the actual visible height, the currently displayed page stays mounted during collapse, and per-window generations reject stale animation completions during reversals. Opening/closing use 0.38/0.32-second easing. Reduced Motion and low-power conditions still skip motion. There is no idle animation timer or hover tracking.
+- Drag gestures commit once while moving rather than waiting for release; trackpad pulls remain supported. Sliders and scrolling in the content area keep their gestures.
+- First-time Clock setup explicitly offers Connect Apple Clock or Skip Clock. A previously explicit disabled preference is respected. Done remains disabled while permission or a connection is pending. Accessibility permission is checked once per second only while setup is open; after the grant, an explicit connection action launches Clock without activating it, locates a unique native Timers tab and selects it without starting or modifying timers. Cold launch gets at most three bounded attempts and a six-second overall timeout. Unsupported layouts show Retry instead of falsely claiming setup succeeded.
+- Completed setup is retained. Missing/revoked Accessibility permission or an unfinished connection reopens the setup window at launch when Clock is enabled. Replacing an ad hoc signed app may still require the user to grant macOS permission again; the app cannot grant its own permissions.
+
+Current verification: 171 standalone checks plus the no-hover guard passed. A release build and actual SwiftUI layout renders passed. New checks cover compact score truncation, smaller geometry, Clock setup readiness/permission revocation, and retaining/reversing the displayed page during collapse. Live display frame pacing and native timer control still require device verification; no measured FPS claim is made. The user’s supplied screenshot confirms browser-media metadata is appearing in the earlier 1.6 app.
 
 ## Visible changes
 
@@ -35,7 +49,7 @@ References: [upstream adapter](https://github.com/ungive/mediaremote-adapter), [
 
 ## Verification
 
-- 123 standalone logic checks passed: activity selection/gestures, Calendar boundaries, geometry, Clock parsing/control policy, browser metadata parsing and limits. A separate source guard fails if hover state, tracking areas or pointer entry/exit/movement handlers are introduced.
+- 171 standalone logic checks passed: activity selection/gestures, Calendar boundaries, geometry, Clock parsing/control policy, browser metadata parsing and limits. A separate source guard fails if hover state, tracking areas or pointer entry/exit/movement handlers are introduced.
 - Release app compiled with Command Line Tools and macOS 26.5 SDK. Strict ad hoc signature and ZIP checks are performed on the packaged output.
 - Actual SwiftUI fixture renders reviewed for timer and media content. These are synthetic layout previews, not proof of live integrations.
 - The native media helper launched and returned valid empty JSON in the current environment. Its upstream self-test did not establish an active session (exit 4 with the command-line test publisher; exit 3 with a bundled publisher that did not report ready). This is not a passing live compatibility result.
@@ -50,3 +64,19 @@ References: [upstream adapter](https://github.com/ungive/mediaremote-adapter), [
 4. Start a disposable timer in Apple Clock. Grant Accessibility once, return from Settings, and confirm automatic observation. Test Pause/Resume/Stop from the notch; cancel the confirmation first, then confirm it. Check another timer is untouched. Repeat with Clock behind other windows, hidden/minimized if macOS still exposes it, and after permission revocation.
 5. Show sports + music + timer, then swipe to Calendar. Calendar must not replace a live slot. Let an event end and confirm only the island advances to the next same-day event; Apple Calendar itself must be unchanged.
 6. Sleep/wake and disable/re-enable integrations. No duplicate helper or stale activity should survive. Verify actual Energy Impact and wakeups before making battery claims.
+
+### Music title and playback motion (build 8)
+
+Long titles now scroll to the end and back with eased movement and a 1.6-second reading pause at each end, in both the compact and expanded media views. Short titles remain stationary. Compact trailing content is five cyan playback bars instead of the creator name; artist metadata remains in the expanded view. Bars are decorative playback indicators, not microphone capture or audio amplitude analysis. Full titles remain available to accessibility.
+
+Motion redraws only its small text/bar surfaces at a maximum requested 30 frames/second while playback and the provider are active and the surface is visible. Motion stops when paused, suspended, in Low Power Mode or with Reduce Motion; hidden expanded content never runs a decorative animation. This introduces no media polling or idle repeating task. User-requested macOS adaptation informed by [Apple’s Live Activities design guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities) and [Dynamic Island interaction guidance](https://support.apple.com/en-ie/guide/iphone/iph28f50d10d/ios), not a claim of Apple’s private Now Playing implementation or continuous ActivityKit animation support.
+
+### Gesture and browser-session follow-up (build 8)
+
+One continuous press-and-drag recognizer now replaces the competing long-press/exclusive-swipe pair. Hold for about 0.3 seconds, then drag sideways at least 22 points to merge/separate; a quick sideways drag changes pages. Pull down/up uses 18 points. Recognition waits for a dominant direction and commits once. Expanded input is confined to the header and bottom handle, preserving media sliders and scrolling. Trackpad scrolling now works on both satellite capsules too; click-hold while scrolling sideways toggles merge/separate. No hover behavior was added.
+
+Satellites slide 32 points outward/inward with a 0.32-second eased fade; stale completions are guarded during reversal. New media sessions automatically separate the live slots. A manual merge remains through ordinary metadata updates and pauses. Session disappearance closes an open music panel and merges its slot; the next playing session splits again.
+
+The media lifecycle now rejects old paused metadata at app startup, keeps a session that was observed playing when paused, and clears it on metadata withdrawal, source-app termination, adapter failure or sleep. A vendored adapter correction clears the entire stale snapshot when MediaRemote reports no player PID, rather than retaining its old title and bundle. These are Now Playing session signals, not direct browser tab enumeration. YouTube, Netflix and Prime Video work only when the browser exposes their session to macOS. If a browser retains paused metadata after a tab closes, exact tab closure is unavailable to this adapter; no claim of universal tab detection is made. An explicit browser extension would be required to promise tab-level lifecycle across those sites.
+
+Expanded media content now uses 180 points instead of 220 (206 when a connection/control message needs room). Cricket uses 320 instead of 360, preserving its scrolling scorecard and bottom handle. The camera band and handle are added separately, so trimming the empty footer does not move content behind the physical notch.

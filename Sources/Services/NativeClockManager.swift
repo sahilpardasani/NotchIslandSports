@@ -11,9 +11,25 @@ final class NativeClockManager: ObservableObject {
     @Published private(set) var observedAt: Date?
     @Published private(set) var controlBusy = false
     @Published private(set) var controlMessage: String?
+    @Published private(set) var hasAccessibilityAccess = AXIsProcessTrusted()
+    @Published private(set) var setupInProgress = false
+    @Published private(set) var setupFailure: String?
+    @Published private(set) var setupValidated = false
+    @Published private(set) var setupChoiceMade = false
+    private var pendingSetup = false
+    private var setupVisible = false
+    private var setupToken: UUID?
+    var setupState: ClockSetupState {
+        ClockSetupState.resolve(enabled: enabled, trusted: hasAccessibilityAccess,
+            connecting: pendingSetup || setupInProgress, validated: setupValidated, failed: setupFailure != nil)
+    }
+    var configurationReady: Bool { setupChoiceMade && setupState.canFinish }
     @Published var enabled: Bool {
         didSet {
             defaults.set(enabled, forKey: "NativeClockObservation")
+            setupChoiceMade = true
+            defaults.set(true, forKey: "NativeClockSetupChoiceMade")
+            if !enabled { pendingSetup = false; setupInProgress = false; setupToken = nil; setupFailure = nil }
             if enabled && running { refresh() } else { clear("Native Clock observation is off") }
         }
     }
@@ -29,15 +45,68 @@ final class NativeClockManager: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         enabled = defaults.bool(forKey: "NativeClockObservation")
+        setupValidated = defaults.bool(forKey: "NativeClockConfigured")
+        setupChoiceMade = defaults.bool(forKey: "NativeClockSetupChoiceMade") || defaults.object(forKey: "NativeClockObservation") != nil
         reader.onChange = { [weak self] in
             Task { @MainActor in self?.refresh() }
         }
     }
 
     func requestPermission() {
+        pendingSetup = true
+        setupFailure = nil
+        setupValidated = false
+        defaults.set(false, forKey: "NativeClockConfigured")
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
         enabled = true
+        refresh()
+    }
+
+    func beginSetupObservation() { setupVisible = true; refresh() }
+    func endSetupObservation() { setupVisible = false; refresh() }
+
+    private func continueSetup() {
+        guard pendingSetup, !setupInProgress, hasAccessibilityAccess else { return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.clock") else {
+            pendingSetup = false; setupFailure = "Apple Clock is not installed."; return
+        }
+        setupInProgress = true
+        let token = UUID(); setupToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.finishSetup(false, token: token) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { [weak self] app, error in
+            Task { @MainActor in
+                guard let self, self.setupToken == token, self.enabled, self.running else { return }
+                guard let app, error == nil else { self.finishSetup(false, token: token); return }
+                // Selecting the Timers tab is part of the explicit Connect/Retry action only.
+                self.connectTimers(pid: app.processIdentifier, token: token)
+            }
+        }
+    }
+
+    private func connectTimers(pid: pid_t, token: UUID, attempt: Int = 0) {
+        guard setupToken == token, enabled, running else { return }
+        reader.selectTimersTab(pid: pid) { [weak self] success in
+            Task { @MainActor in
+                guard let self, self.setupToken == token else { return }
+                // Clock's launch callback can precede construction of its first window.
+                if !success && attempt < 2 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        self?.connectTimers(pid: pid, token: token, attempt: attempt + 1)
+                    }
+                } else { self.finishSetup(success, token: token) }
+            }
+        }
+    }
+
+    private func finishSetup(_ success: Bool, token: UUID) {
+        guard setupToken == token, enabled, running else { return }
+        setupToken = nil; pendingSetup = false; setupInProgress = false
+        setupValidated = success
+        defaults.set(success, forKey: "NativeClockConfigured")
+        setupFailure = success ? nil : "Open Clock’s Timers page, then choose Retry connection."
         refresh()
     }
 
@@ -64,6 +133,7 @@ final class NativeClockManager: ObservableObject {
 
     func stop() {
         running = false
+        setupToken = nil; setupInProgress = false
         generation += 1
         controlBusy = false
         poll?.invalidate(); poll = nil
@@ -96,11 +166,13 @@ final class NativeClockManager: ObservableObject {
     func refresh() {
         guard running, enabled else { return }
         lastTrusted = AXIsProcessTrusted()
+        if hasAccessibilityAccess != lastTrusted { hasAccessibilityAccess = lastTrusted }
         guard lastTrusted else {
             clear("Allow NotchIslandSports in System Settings → Privacy & Security → Accessibility. Observation resumes automatically.")
-            schedule(after: 15)
+            schedule(after: setupVisible ? 1 : 15)
             return
         }
+        if pendingSetup { continueSetup(); return }
         guard !reading else { return }
         poll?.invalidate()
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.clock").first else {
@@ -115,6 +187,10 @@ final class NativeClockManager: ObservableObject {
                 guard let self, self.running, self.enabled, token == self.generation else { return }
                 self.reading = false
                 self.timers = snapshot ?? []
+                if !self.timers.isEmpty && !self.setupValidated {
+                    self.setupValidated = true; self.setupFailure = nil
+                    self.defaults.set(true, forKey: "NativeClockConfigured")
+                }
                 self.observedAt = self.timers.isEmpty ? nil : Date()
                 self.status = self.timers.isEmpty
                     ? "No readable timers. Keep Clock’s Timers view open. This experimental adapter currently recognizes English timer controls."
@@ -180,6 +256,47 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
     private func removeObserver() {
         if let observer { CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes) }
         observer = nil; application = nil; processID = nil
+    }
+
+    /// Bounded, uniquely matched native tab selection; never starts or edits a timer.
+    func selectTimersTab(pid: pid_t, completion: @escaping (Bool) -> Void) {
+        let token = epoch()
+        queue.async {
+            guard AXIsProcessTrusted(), NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.clock" else { completion(false); return }
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 0.1)
+            var windowsValue: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+                  let windows = windowsValue as? [AXUIElement], !windows.isEmpty, windows.count <= 2 else { completion(false); return }
+            var remaining = 180, complete = true
+            let deadline = Date().addingTimeInterval(1)
+            var tabs: [AXUIElement] = []
+            func visit(_ element: AXUIElement, depth: Int) {
+                guard depth < 12, remaining > 0, Date() < deadline else { complete = false; return }
+                remaining -= 1
+                func value(_ name: String) -> CFTypeRef? {
+                    var result: CFTypeRef?
+                    _ = AXUIElementCopyAttributeValue(element, name as CFString, &result)
+                    return result
+                }
+                if value(kAXRoleAttribute) as? String == "AXRadioButton" {
+                    let text = [kAXTitleAttribute, kAXDescriptionAttribute].compactMap { value($0) as? String }
+                    if text.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "Timers" }) { tabs.append(element) }
+                }
+                let children = value(kAXChildrenAttribute) as? [AXUIElement] ?? []
+                guard children.count <= 80 else { complete = false; return }
+                for child in children { visit(child, depth: depth + 1) }
+            }
+            for window in windows { visit(window, depth: 0) }
+            guard self.epoch() == token, complete, tabs.count == 1, AXIsProcessTrusted() else { completion(false); return }
+            var selected: CFTypeRef?
+            _ = AXUIElementCopyAttributeValue(tabs[0], kAXValueAttribute as CFString, &selected)
+            if (selected as? NSNumber)?.boolValue == true { completion(true); return }
+            var actions: CFArray?
+            guard AXUIElementCopyActionNames(tabs[0], &actions) == .success,
+                  (actions as? [String])?.contains(kAXPressAction) == true else { completion(false); return }
+            completion(AXUIElementPerformAction(tabs[0], kAXPressAction as CFString) == .success)
+        }
     }
 
     func read(pid: pid_t, completion: @escaping ([ObservedClockTimer]?) -> Void) {

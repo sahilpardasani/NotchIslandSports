@@ -7,7 +7,7 @@ import IslandCore
 // MARK: - AppDelegate
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWindowDelegate {
     
     private var statusItem: NSStatusItem!
     private var panelController: NotchPanelController!
@@ -29,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         setupPanelController()
         resumeProviders()
         observeSystemEvents()
-        if !UserDefaults.standard.bool(forKey: "IslandSetupCompleted") { showSetup() }
+        if !UserDefaults.standard.bool(forKey: "IslandSetupCompleted") || !clock.setupChoiceMade || (clock.enabled && !clock.configurationReady) { showSetup() }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -247,7 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.6 Preview\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.6 Preview (build 8)\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Configure…")
@@ -255,13 +255,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showSetup() {
+        clock.beginSetupObservation()
         if let setupWindow { setupWindow.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 490, height: 600),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "Set up NotchIslandSports"
+        window.delegate = self
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: IslandSetupView(clock: clock, calendar: calendar,
             media: media, presentation: presentation, done: { [weak self] in
+                guard self?.clock.configurationReady == true else { return }
                 UserDefaults.standard.set(true, forKey: "IslandSetupCompleted")
                 self?.setupWindow?.close()
             }))
@@ -270,6 +273,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.activate(ignoringOtherApps: true)
     }
     
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window === setupWindow { clock.endSetupObservation() }
+    }
+
     @objc private func toggleNotchSimulation(_ sender: NSMenuItem) {
         dataManager.forceNotchLayout.toggle()
         sender.state = dataManager.forceNotchLayout ? .on : .off

@@ -1,20 +1,27 @@
 import SwiftUI
 import Cocoa
+import IslandCore
 
-// MARK: - Dynamic Island Waveform (iPhone-faithful: 3 bars)
+// MARK: - Decorative playback bars (not an audio-level meter)
 
 struct DynamicIslandWaveform: View {
     let isPlaying: Bool
     let color: Color
     var barCount: Int = 3
+    var animationAllowed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        HStack(spacing: 2.5) {
-            ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(color)
-                    .frame(width: 3, height: isPlaying ? CGFloat([8, 17, 11, 15, 7][index % 5]) : 4)
+        let moving = isPlaying && animationAllowed && !reduceMotion
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !moving)) { timeline in
+            Canvas { context, size in
+                for index in 0..<barCount {
+                    let height = MediaMotion.barHeight(elapsed: timeline.date.timeIntervalSinceReferenceDate,
+                        index: index, moving: moving, playing: isPlaying)
+                    let rect = CGRect(x: Double(index) * 5.5, y: (size.height - height) / 2, width: 3, height: height)
+                    context.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(color))
+                }
             }
-        }.frame(height: 20).accessibilityHidden(true)
+        }.frame(width: CGFloat(barCount) * 5.5 - 2.5, height: 20).accessibilityHidden(true)
     }
 }
 
@@ -106,6 +113,7 @@ struct NowPlayingCollapsedView: View {
 
 struct NowPlayingExpandedView: View {
     @ObservedObject var manager: NowPlayingManager
+    var animationAllowed = false
     
 
 
@@ -145,11 +153,8 @@ struct NowPlayingExpandedView: View {
 
                         // Track info
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(track.title)
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                            ScrollingMediaTitle(title: track.title, moving: animationAllowed && track.isPlaying, size: 14, weight: .bold)
                                 .foregroundColor(.white)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
 
                             Text(track.artist)
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -164,7 +169,7 @@ struct NowPlayingExpandedView: View {
                             }
 
                             // Waveform in track info (smaller, decorative)
-                            DynamicIslandWaveform(isPlaying: track.isPlaying, color: track.dominantColor, barCount: 5)
+                            DynamicIslandWaveform(isPlaying: track.isPlaying, color: track.dominantColor, barCount: 5, animationAllowed: animationAllowed)
                                 .frame(height: 14)
                                 .padding(.top, 2)
                         }
