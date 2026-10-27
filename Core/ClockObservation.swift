@@ -6,8 +6,9 @@ public struct ClockAXNode: Equatable, Sendable {
     public var identifier: String
     public var text: String
     public var children: [ClockAXNode]
-    public init(role: String, identifier: String = "", text: String = "", children: [ClockAXNode] = []) {
-        self.role = role; self.identifier = identifier; self.text = text; self.children = children
+    public var selected: Bool
+    public init(role: String, identifier: String = "", text: String = "", children: [ClockAXNode] = [], selected: Bool = false) {
+        self.role = role; self.identifier = identifier; self.text = text; self.children = children; self.selected = selected
     }
 }
 
@@ -25,6 +26,7 @@ public struct ObservedClockTimer: Equatable, Identifiable, Sendable {
 public enum ClockTimerParser {
     /// Conservative English UI prototype. Never parse clocks/stopwatches or presets as live timers.
     public static func parse(_ root: ClockAXNode) -> [ObservedClockTimer] {
+        if let detail = selectedDetail(root) { return [detail.timer] }
         var results: [ObservedClockTimer] = []
         func visit(_ node: ClockAXNode, path: String, depth: Int) {
             guard depth < 12 else { return }
@@ -55,6 +57,47 @@ public enum ClockTimerParser {
         }
     }
 
+    /// The installed Clock UI separates a selected sidebar timer from its detail controls.
+    /// Pair only one selected UUID card with one matching detail group in the SAME window.
+    /// Paths are snapshot lookup keys, not timer identities; the semantic UUID is rechecked.
+    public static func selectedDetail(_ root: ClockAXNode) -> ClockSelectedDetail? {
+        var matches: [ClockSelectedDetail] = []
+        for (windowIndex, window) in root.children.enumerated() where window.role == "AXWindow" {
+            var nodes: [(ClockAXNode, String)] = []
+            func walk(_ node: ClockAXNode, _ path: String, _ depth: Int) {
+                guard depth < 12 else { return }
+                nodes.append((node, path))
+                for (index, child) in node.children.enumerated() { walk(child, "\(path).\(index)", depth + 1) }
+            }
+            walk(window, "clock.\(windowIndex)", 0)
+            let selected = nodes.filter { node, _ in
+                node.selected && ["AXGroup", "AXLayoutItem"].contains(node.role) && UUID(uuidString: node.identifier) != nil
+            }
+            guard selected.count == 1 else { continue }
+            let (card, selectionPath) = selected[0]
+            let summaries = card.children.filter { $0.role == "AXStaticText" && $0.identifier == card.identifier }
+            let states = card.children.filter { $0.role == "AXButton" }.map { $0.text.lowercased() }
+            guard summaries.count == 1, states.count == 1, ["pause", "resume"].contains(states[0]),
+                  let first = summaries[0].text.split(separator: ",", maxSplits: 1).first,
+                  let remaining = duration(String(first)) else { continue }
+            let paused = states[0] == "resume"
+            let details = nodes.compactMap { node, path -> (String, TimeInterval)? in
+                guard ["AXGroup", "AXLayoutItem"].contains(node.role) else { return nil }
+                let buttons = node.children.filter { $0.role == "AXButton" }
+                let cancel = buttons.filter { $0.identifier == "CancelButton" && $0.text.lowercased() == "cancel" }
+                let toggle = buttons.filter { $0.identifier == "PauseResumeButton" && $0.text.lowercased() == states[0] }
+                let times = node.children.filter { $0.role == "AXStaticText" }.compactMap { duration($0.text) }
+                guard cancel.count == 1, toggle.count == 1, buttons.count == 2, times.count == 1,
+                      abs(times[0] - remaining) <= (paused ? 0 : 1) else { return nil }
+                return (path, times[0])
+            }
+            guard details.count == 1 else { continue }
+            matches.append(.init(timer: .init(id: card.identifier, remaining: details[0].1, paused: paused,
+                controlIdentifier: "selected-detail/" + card.identifier), detailPath: details[0].0, selectionPath: selectionPath))
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
     public static func duration(_ text: String) -> TimeInterval? {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard value.range(of: #"^\d{1,3}:\d{2}(:\d{2})?$"#, options: .regularExpression) != nil else { return nil }
@@ -67,6 +110,12 @@ public enum ClockTimerParser {
         guard depth > 0 else { return [node] }
         return [node] + node.children.flatMap { flatten($0, depth: depth - 1) }
     }
+}
+
+public struct ClockSelectedDetail: Sendable {
+    public let timer: ObservedClockTimer
+    public let detailPath: String
+    public let selectionPath: String
 }
 
 public enum NativeClockCommand: String, Sendable { case pause, resume, cancel }

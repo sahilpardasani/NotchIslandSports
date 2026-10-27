@@ -28,6 +28,14 @@ final class NotchTests: XCTestCase {
         XCTAssertEqual(slots.tertiary,.music)
         XCTAssertTrue(slots.overflow.isEmpty)
     }
+    func testTimerPanelHasCompactSizeWithSameCameraAnchor() {
+        let screen = CGRect(x:0,y:0,width:1512,height:982)
+        let timer = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120,expandedWidth:440)
+        XCTAssertEqual(timer.primary.width,440)
+        XCTAssertEqual(timer.primary.height,170)
+        XCTAssertEqual(timer.primary.midX,screen.midX)
+        XCTAssertEqual(timer.primary.maxY,screen.maxY)
+    }
     func testControlsRequireFreshIdentifiedMatchingTimerAndState() {
         let old = ObservedClockTimer(id:"tea",remaining:120,paused:false,controlIdentifier:"tea")
         let fresh = ObservedClockTimer(id:"tea",remaining:118,paused:false,controlIdentifier:"tea")

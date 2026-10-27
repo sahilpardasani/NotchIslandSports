@@ -10,7 +10,7 @@ public struct NotchGeometry: Equatable, Sendable {
     public let tertiary: CGRect
 
     public static func layout(screen: CGRect, safeTop: CGFloat, leftArea: CGRect?, rightArea: CGRect?,
-                              simulated: Bool = false, expanded: Bool, contentHeight: CGFloat) -> Self {
+                              simulated: Bool = false, expanded: Bool, contentHeight: CGFloat, expandedWidth: CGFloat = 620) -> Self {
         let notched = safeTop > 0 || simulated
         let reportedWidth = (rightArea?.minX ?? 0) - (leftArea?.maxX ?? 0)
         let reportedCenter = ((leftArea?.maxX ?? 0) + (rightArea?.minX ?? 0)) / 2
@@ -28,7 +28,7 @@ public struct NotchGeometry: Equatable, Sendable {
         let gap: CGFloat = 8
         // Symmetric allowance keeps the primary centered on the camera as activities appear/disappear.
         let room = max(200, 2 * min(center - screen.minX, screen.maxX - center) - 2 * (satelliteWidth + gap + 12))
-        let width = min(expanded ? 620 : cameraWidth + 320, room)
+        let width = min(expanded ? min(620, max(320, expandedWidth)) : cameraWidth + 320, room)
         let height = expanded ? min(contentHeight + cameraHeight + 18, screen.height - 24) : compactHeight
         let primary = CGRect(x:center - width / 2,y:top - height,width:width,height:height)
         let secondary = CGRect(x:primary.minX - gap - satelliteWidth,y:top - compactHeight,width:satelliteWidth,height:compactHeight)

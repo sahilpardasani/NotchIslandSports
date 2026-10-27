@@ -90,7 +90,7 @@ final class NotchPanelController {
         }.store(in: &cancellables)
         media.$currentTrack.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         calendar.$currentEvent.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
-        clock.$timers.map { !$0.isEmpty }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
+        clock.$timers.map { min($0.count, 2) }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         presentation.objectWillChange.sink { [weak self] in self?.queueUpdate() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.repositionForScreen() }.store(in: &cancellables)
@@ -133,19 +133,19 @@ final class NotchPanelController {
     }
 
     private var expandedHeight: CGFloat {
-        if presentation.selectedTab == .calendar { return 470 }
-        if presentation.selectedTab == .clock { return 310 }
-        if presentation.selectedTab == .music { return 280 }
+        if presentation.selectedTab == .calendar { return 420 }
+        if presentation.selectedTab == .clock { return NativeClockView.contentHeight(timerCount: clock.timers.count) }
+        if presentation.selectedTab == .music { return 220 }
         if dataManager.showMatchSelector { return 330 }
         guard let match = dataManager.activeMatch else { return 280 }
         switch match {
-        case .cricket: return 410
-        case .tennis: return 260
-        case .soccer: return 270
-        case .lacrosse: return 230
-        case .f1: return 370
-        case .nfl, .collegeFootball: return 290
-        default: return 250
+        case .cricket: return 360
+        case .tennis: return 210
+        case .soccer: return 220
+        case .lacrosse: return 180
+        case .f1: return 320
+        case .nfl, .collegeFootball: return 240
+        default: return 200
         }
     }
 
@@ -154,11 +154,12 @@ final class NotchPanelController {
         guard !presentation.suspended else { hide(); return }
         let layout = NotchGeometry.layout(screen: screen.frame, safeTop: screen.safeAreaInsets.top,
             leftArea: screen.auxiliaryTopLeftArea, rightArea: screen.auxiliaryTopRightArea,
-            simulated: dataManager.forceNotchLayout, expanded: presentation.expanded, contentHeight: expandedHeight)
+            simulated: dataManager.forceNotchLayout, expanded: presentation.expanded, contentHeight: expandedHeight,
+            expandedWidth: presentation.selectedTab == .clock ? 440 : 600)
         if presentation.expanded, presentation.expandedPanelHeight != layout.primary.height {
             presentation.expandedPanelHeight = layout.primary.height
         }
-        (panel.contentView as? HoverTrackingHostingView<NotchContentView>)?.swipeHeaderHeight = presentation.cameraHeight + 60
+        (panel.contentView as? HoverTrackingHostingView<NotchContentView>)?.swipeHeaderHeight = presentation.cameraHeight + 8
         let animate = animated && !presentation.reduceMotion && !presentation.lowPower
         setFrame(panel, layout.primary, animated: animate)
         setFrame(secondaryPanel, layout.secondary, animated: animate)

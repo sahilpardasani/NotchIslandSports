@@ -27,7 +27,7 @@ struct IslandSwipeGesture: ViewModifier {
 
     private func handle(_ drag: DragGesture.Value, held: Bool) {
         // Preserve sliders and vertical scrolling inside the expanded content.
-        guard !headerOnly || !presentation.expanded || drag.startLocation.y < presentation.cameraHeight + 60 else { return }
+        guard !headerOnly || !presentation.expanded || drag.startLocation.y < presentation.cameraHeight + 8 || drag.startLocation.y >= presentation.expandedPanelHeight - 22 else { return }
         if !held, drag.translation.height > 18, abs(drag.translation.height) > abs(drag.translation.width),
            let activity = pullDownActivity {
             presentation.open(activity)

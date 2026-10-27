@@ -58,7 +58,8 @@ final class HoverTrackingHostingView<Content: View>: NSHostingView<Content> {
         if event.phase == .began { scrollSwipe = 0; swiped = false }
         let point = convert(event.locationInWindow, from: nil)
         let fromTop = isFlipped ? point.y : bounds.height - point.y
-        if fromTop <= swipeHeaderHeight, event.momentumPhase.isEmpty,
+        let onHandle = fromTop <= swipeHeaderHeight || fromTop >= bounds.height - 22
+        if onHandle, event.momentumPhase.isEmpty,
            abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
             scrollSwipe += event.scrollingDeltaX
             if !swiped, abs(scrollSwipe) > 24 {
@@ -71,7 +72,7 @@ final class HoverTrackingHostingView<Content: View>: NSHostingView<Content> {
             return
         }
         // Vertical scroll on the header opens/closes the island; content lists keep scrolling.
-        if fromTop <= swipeHeaderHeight, event.momentumPhase.isEmpty {
+        if onHandle, event.momentumPhase.isEmpty {
             if event.phase == .began { scrollPull = 0 }
             scrollPull += event.scrollingDeltaY
             if !swiped, abs(scrollPull) > 12 {

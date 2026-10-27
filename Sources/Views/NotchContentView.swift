@@ -97,25 +97,8 @@ struct NotchContentView: View {
     var body: some View {
         ZStack(alignment: .top) {
             if presentation.expanded {
-                VStack(spacing: 6) {
+                VStack(spacing: 0) {
                     Color.clear.frame(height: presentation.cameraHeight)
-                    Capsule().fill(Color.white.opacity(0.35)).frame(width: 34, height: 4)
-                        .frame(maxWidth: .infinity).frame(height: 12).contentShape(Rectangle())
-                        .accessibilityLabel("Drag up to collapse island")
-                    HStack(spacing: 6) {
-                        Button { presentation.cyclePrimary(forward: false) } label: { Image(systemName: "chevron.left") }
-                            .buttonStyle(.plain).accessibilityLabel("Previous page")
-                        Spacer()
-                        Text(presentation.selectedTab == .clock ? "Apple Clock" : presentation.selectedTab.rawValue.capitalized)
-                            .font(.system(size: 12, weight: .semibold))
-                        Spacer()
-                        Button { presentation.cyclePrimary() } label: { Image(systemName: "chevron.right") }
-                            .buttonStyle(.plain).accessibilityLabel("Next page")
-                        Button { presentation.collapse() } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.plain).accessibilityLabel("Collapse island")
-                            .keyboardShortcut(.cancelAction)
-                    }
-                    .padding(.horizontal, 10).padding(.top, 8)
                     Group {
                         switch presentation.selectedTab {
                         case .sports:
@@ -139,6 +122,14 @@ struct NotchContentView: View {
                     if presentation.selectedTab == .sports, let error = dataManager.detailError ?? dataManager.lastError {
                         Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
                     }
+                    Button { presentation.collapse() } label: {
+                        Capsule().fill(Color.white.opacity(0.32)).frame(width: 34, height: 4)
+                            .frame(maxWidth: .infinity).frame(height: 18).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Collapse island")
+                    .keyboardShortcut(.cancelAction)
+                    .help("Swipe up to collapse · Swipe sideways to change activity")
                 }
                 .frame(height: presentation.expandedPanelHeight)
                 .transition(.opacity)
@@ -161,7 +152,10 @@ struct NotchContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18).fill(Color.black))
+        .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous).fill(Color.black))
+        .overlay(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18, style: .continuous)
+            .strokeBorder(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
+            .allowsHitTesting(false))
         .clipShape(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18))
         .foregroundColor(.white)
         .preferredColorScheme(.dark)

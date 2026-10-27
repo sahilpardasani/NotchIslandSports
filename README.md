@@ -1,3 +1,5 @@
+> **1.5 preview:** Restored the clean scorecard layout and replaced the tall timer diagnostics panel with a large countdown and circular Pause/Resume/Cancel buttons. [Details, native Clock support and validation](docs/TIMER-UI-RESTORATION.md).
+
 > **1.4 preview:** Up to three live activities; Calendar stays outside the slots and opens by swipe. Hold-and-swipe merges; the menu bar manages widgets/settings. The collapsed strip now fits the camera band, with eased pull-down/collapse transitions. [Current behavior, limits and validation](docs/INTERACTION-UPDATE.md).
 
 > Calendar is read-only and its agenda advances past ended events without changing Apple Calendar. In 1.4 it is a swipe-accessed page, not a split or compact activity.

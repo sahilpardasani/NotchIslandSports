@@ -1,3 +1,5 @@
+> **1.5 update:** [Restored UI and timer controls](TIMER-UI-RESTORATION.md) is the current UI/Clock behavior. Headerless scorecards, bottom handle, compact countdown with circular native buttons; setup stays in the menu bar.
+
 # NotchIslandSports 1.4 — live slots, gestures and compact height
 
 This is the current behavior, superseding the 1.3 Calendar-as-a-slot and tab-bar design. Existing sports parsers/scorecards, music handling, native Clock observation and read-only Calendar access are preserved.

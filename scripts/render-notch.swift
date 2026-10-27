@@ -9,7 +9,6 @@ import IslandCore
         data.isUsingMockData = true
         data.hasNotch = true; data.notchWidth = 180
         data.activeMatch = MockDataProvider.getMockMatches().first { $0.sportType == .cricket }
-        let clock = NativeClockManager.visualFixture()
         let calendar = CalendarManager.visualFixture()
         let media = NowPlayingManager()
         media.currentTrack = NowPlayingTrack(title: "Preview track", artist: "Synthetic fixture", album: "", duration: 180,
@@ -20,19 +19,27 @@ import IslandCore
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none),
-                                  ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock), ("notch-merged", nil)] {
+                                  ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
+                                  ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
+                                  ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
+                                  ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+            let clock = NativeClockManager.visualFixture(paused: name == "notch-clock-paused",
+                controllable: name != "notch-clock-unavailable", count: name == "notch-clock-multiple" ? 3 : name == "notch-clock-empty" ? 0 : 1,
+                remaining: name == "notch-clock-multiple" ? 3723 : 197)
             let presentation = IslandPresentation(defaults: defaults)
             presentation.cameraHeight = 32
             presentation.update(sports: true, music: true, clock: true, calendar: true)
             if let activity { presentation.open(activity) }
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
-                expanded: activity != nil, contentHeight: activity == .calendar ? 470 : 310)
+                expanded: activity != nil,
+                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : 360,
+                expandedWidth: activity == .clock ? 440 : 600)
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
             if name == "notch-merged" { presentation.mergeActivities() }
             let view = ZStack(alignment: .topLeading) {
                 Color(red: 0.12, green: 0.14, blue: 0.19)
-                Text("APP CONTENT BELOW THE NOTCH").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
+                Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
                     .padding(.top, activity == nil ? 100 : 560).padding(.leading, 28)
                 NotchContentView(hoverState: HoverState(), dataManager: data, nowPlayingManager: media,
                     clockManager: clock, calendarManager: calendar, presentation: presentation)

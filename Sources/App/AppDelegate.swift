@@ -111,6 +111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let clockSettings = NSMenu()
         let clockItem = NSMenuItem(title: "Clock Settings", action: nil, keyEquivalent: "")
         clockItem.submenu = clockSettings
+        item("Clock Status…", #selector(showClockStatus), in: clockSettings)
         item("Show Native Timers", #selector(openNativeClock), key: "t", in: clockSettings)
         item("Enable Clock Observation…", #selector(enableClock), in: clockSettings)
         item("Refresh Native Timers", #selector(refreshClock), in: clockSettings)
@@ -241,6 +242,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func enableClock() { clock.requestPermission() }
     @objc private func refreshClock() { clock.refresh() }
     @objc private func disableClock() { clock.enabled = false }
+    @objc private func showClockStatus() {
+        let alert = NSAlert()
+        alert.messageText = "Native Clock — Experimental"
+        var details = clock.status
+        if let observed = clock.observedAt { details += "\nLast observed: " + observed.formatted(date: .omitted, time: .standard) }
+        if let message = clock.controlMessage { details += "\n" + message }
+        details += "\n\nControls require readable, uniquely identified native Clock buttons. No in-app timer is created."
+        alert.informativeText = details
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
     @objc private func launchClock() { clock.openClock() }
 
     @objc private func filterAllSports() {
@@ -276,7 +288,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.4 Preview\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.5 Preview\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()

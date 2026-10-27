@@ -153,13 +153,15 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
     private var processID: pid_t?
     private var lastSignal = Date.distantPast
     private var cards: [String: [AXUIElement]] = [:]
+    private var snapshotElements: [String: AXUIElement] = [:]
+    private var selectedAnchors: [String: AXUIElement] = [:]
     private let controlLock = NSLock()
     private var controlEpoch = 0
     private func epoch() -> Int { controlLock.lock(); defer { controlLock.unlock() }; return controlEpoch }
     private func invalidateControls() { controlLock.lock(); controlEpoch += 1; controlLock.unlock() }
 
 
-    func detach() { invalidateControls(); queue.async { self.removeObserver(); self.cards = [:] } }
+    func detach() { invalidateControls(); queue.async { self.removeObserver(); self.cards = [:]; self.snapshotElements = [:]; self.selectedAnchors = [:] } }
 
     private func removeObserver() {
         if let observer { CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes) }
@@ -168,7 +170,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
 
     func read(pid: pid_t, completion: @escaping ([ObservedClockTimer]?) -> Void) {
         queue.async {
-            self.cards = [:]
+            self.cards = [:]; self.snapshotElements = [:]; self.selectedAnchors = [:]
             if self.processID != pid {
                 self.removeObserver()
                 let app = AXUIElementCreateApplication(pid)
@@ -205,16 +207,23 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
             var budget = 200
             let deadline = Date().addingTimeInterval(0.8)
             var exhausted = elements.count > 2
-            let children = elements.prefix(2).compactMap { window -> ClockAXNode? in
+            let children = elements.prefix(2).enumerated().compactMap { windowIndex, window -> ClockAXNode? in
                 var minimized: CFTypeRef?
                 _ = AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
-                guard (minimized as? Bool) != true else { return nil }
-                return self.node(window, depth: 0, budget: &budget, deadline: deadline, exhausted: &exhausted)
+                guard (minimized as? Bool) != true else { return ClockAXNode(role: "AXWindow") }
+                return self.node(window, path: "clock.\(windowIndex)", depth: 0, budget: &budget, deadline: deadline, exhausted: &exhausted)
             }
             // Partial trees must never imply that a previously seen timer was cancelled.
-            guard !exhausted else { self.cards = [:]; completion(nil); return }
+            guard !exhausted else { self.cards = [:]; self.snapshotElements = [:]; self.selectedAnchors = [:]; completion(nil); return }
+            let root = ClockAXNode(role: "AXApplication", children: children)
+            if let selected = ClockTimerParser.selectedDetail(root), let id = selected.timer.controlIdentifier,
+               let detail = self.snapshotElements[selected.detailPath], let anchor = self.snapshotElements[selected.selectionPath] {
+                self.cards[id] = [detail]
+                self.selectedAnchors[id] = anchor
+            }
+            self.snapshotElements = [:]
             let controlDeadline = Date().addingTimeInterval(0.3)
-            let timers = ClockTimerParser.parse(ClockAXNode(role: "AXApplication", children: children)).enumerated().map { index, timer in
+            let timers = ClockTimerParser.parse(root).enumerated().map { index, timer in
                 guard index < 3, Date() < controlDeadline, let id = timer.controlIdentifier, let cards = self.cards[id], cards.count == 1,
                       let buttons = self.buttons(in: cards[0]), buttons[timer.paused ? .resume : .pause] != nil,
                       buttons[.cancel] != nil else {
@@ -234,6 +243,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                   let id = timer.controlIdentifier, let oldCards = self.cards[id], oldCards.count == 1,
                   let oldButton = self.buttons(in: oldCards[0])?[command] else { completion(false); return }
             let oldCard = oldCards[0]
+            let oldAnchor = self.selectedAnchors[id]
             self.read(pid: pid) { fresh in
                 guard self.epoch() == token, AXIsProcessTrusted(),
                       NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.clock",
@@ -243,6 +253,13 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                       let newCards = self.cards[id], newCards.count == 1, CFEqual(oldCard, newCards[0]),
                       let newButton = self.buttons(in: newCards[0])?[command], CFEqual(oldButton, newButton)
                 else { completion(false); return }
+                // Selected-detail controls must still belong to the exact same selected native card.
+                if let oldAnchor {
+                    guard let newAnchor = self.selectedAnchors[id], CFEqual(oldAnchor, newAnchor) else { completion(false); return }
+                    var selected: CFTypeRef?
+                    guard AXUIElementCopyAttributeValue(newAnchor, kAXSelectedAttribute as CFString, &selected) == .success,
+                          (selected as? Bool) == true else { completion(false); return }
+                } else if self.selectedAnchors[id] != nil { completion(false); return }
                 completion(AXUIElementPerformAction(newButton, kAXPressAction as CFString) == .success)
             }
         }
@@ -282,7 +299,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
         return found.mapValues { $0[0] }
     }
 
-    private func node(_ element: AXUIElement, depth: Int, budget: inout Int,
+    private func node(_ element: AXUIElement, path: String, depth: Int, budget: inout Int,
                       deadline: Date, exhausted: inout Bool) -> ClockAXNode? {
         guard depth < 12, budget > 0, Date() < deadline else { exhausted = true; return nil }
         budget -= 1
@@ -293,7 +310,10 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
         }
         let role = attribute(kAXRoleAttribute) as? String ?? ""
         let identifier = attribute(kAXIdentifierAttribute) as? String ?? ""
-        if !identifier.isEmpty { cards[identifier, default: []].append(element) }
+        snapshotElements[path] = element
+        if !identifier.isEmpty, ["AXGroup", "AXLayoutItem"].contains(role) { cards[identifier, default: []].append(element) }
+        let selected = UUID(uuidString: identifier) != nil && ["AXGroup", "AXLayoutItem"].contains(role)
+            ? (attribute(kAXSelectedAttribute) as? Bool ?? false) : false
         let value = attribute(kAXValueAttribute) as? String
         let title = attribute(kAXTitleAttribute) as? String
         let description = attribute(kAXDescriptionAttribute) as? String
@@ -301,9 +321,9 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
         let children = attribute(kAXChildrenAttribute) as? [AXUIElement] ?? []
         if children.count > 80 { exhausted = true }
         return ClockAXNode(role: role, identifier: identifier, text: String(text.prefix(128)),
-            children: children.prefix(80).compactMap {
-                node($0, depth: depth + 1, budget: &budget, deadline: deadline, exhausted: &exhausted)
-            })
+            children: children.prefix(80).enumerated().compactMap { index, child in
+                node(child, path: "\(path).\(index)", depth: depth + 1, budget: &budget, deadline: deadline, exhausted: &exhausted)
+            }, selected: selected)
     }
 }
 
@@ -314,9 +334,12 @@ private extension NativeClockCommand {
 
 #if DEBUG
 extension NativeClockManager {
-    static func visualFixture() -> NativeClockManager {
+    static func visualFixture(paused: Bool = false, controllable: Bool = true, count: Int = 1, remaining: TimeInterval = 197) -> NativeClockManager {
         let model = NativeClockManager(defaults: UserDefaults(suiteName: "NotchIsland.ClockVisualFixture")!)
-        model.timers = [.init(id: "fixture", remaining: 197, paused: false, controlIdentifier: "fixture")]
+        model.timers = (0..<count).map { index in
+            .init(id: "fixture-\(index)", remaining: remaining + Double(index * 60), paused: paused,
+                  controlIdentifier: controllable ? "fixture-\(index)" : nil)
+        }
         model.status = "Visual fixture · no native timer is controlled"
         model.observedAt = Date()
         return model

@@ -13,3 +13,5 @@ xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-
 build/calendar-checks
 xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-notch.swift build/check-modules/IslandCore.o -o build/notch-checks
 build/notch-checks
+xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-clock-detail.swift build/check-modules/IslandCore.o -o build/clock-detail-checks
+build/clock-detail-checks
