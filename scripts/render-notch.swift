@@ -22,7 +22,8 @@ import IslandCore
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
-                                  ("notch-approval-expanded", .approval), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+                                  ("notch-approval-expanded", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+            let approvalCrowded = name == "notch-approval-crowded"
             let scoreRegression = name.hasPrefix("notch-score-")
             data.activeMatch = scoreRegression ? .cricket(CricketMatch(id: "layout-regression", status: .unknown,
                 homeTeam: "Sikkim", awayTeam: "Nagaland", homeTeamAbbrev: "SIKM", awayTeamAbbrev: "NAGA",
@@ -33,7 +34,7 @@ import IslandCore
                 remaining: name == "notch-clock-multiple" ? 3723 : 197)
             let presentation = IslandPresentation(defaults: defaults)
             presentation.cameraHeight = 32
-            presentation.update(sports: true, music: true, clock: true, calendar: true)
+            presentation.update(sports: true, music: true, clock: true, calendar: true, approval: approvalCrowded)
             if let activity { presentation.open(activity) }
             if name == "notch-media-primary" {
                 presentation.update(sports: true, music: true, clock: false)
@@ -45,7 +46,7 @@ import IslandCore
                 expanded: activity != nil,
                 contentHeight: activity == .approval ? 360 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
-            let occupied = scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
+            let occupied = approvalCrowded ? [CGRect(x: 0, y: 768, width: 1200, height: 32)] : scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
                 CGRect(x: 960, y: 740, width: 240, height: 60)]
                 : name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
             let placement = MenuBarPlacement.layout(base: geometry, screen: screen, occupied: occupied,

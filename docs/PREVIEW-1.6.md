@@ -11,6 +11,12 @@ Menu-aware placement now applies only to satellite pills: they move to a free si
 
 Version stays 1.6.0; bundle/About build is 11. Approval hooks, native media/Clock, Calendar, merge gestures and the no-hover policy are preserved. Regression checks cover unavailable menu geometry, either crowded side, both sides crowded, merged state, expansion and a display with a negative origin. Actual-view renders include the supplied NAGA `187 & 46/4` / SIKM `184` score with fallback placement. Live display appearance remains a device check.
 
+### Approval visibility and source setup
+
+When a pending approval's satellite cannot fit beside the menus, or activities are merged, the collapsed primary temporarily shows the approval. Pull down opens its full request; an already expanded media/Clock/score page is not replaced. The previous primary selection returns when the request clears or satellite space becomes available. This fixes invisible received requests; it does not create source events or bypass source hook trust.
+
+The configured wildcard handles every supported PermissionRequest tool type, including command, file edits, file/network permission requests and MCP actions when the source emits them. The source must load and trust the handler. Codex's `/hooks` review is a one-time user action; installation alone does not authorize the hook. Restart local sessions afterward. Generic Chat/cloud approval coverage is still unavailable. Existing hold-and-swipe gestures and title scrolling are unchanged.
+
 ## Build 10 approvals retained
 
 Adds local Codex and Claude Code PermissionRequest hooks, including supported desktop coding sessions, with an orange pending activity, full hook request details and Approve once / Deny / Use app prompt controls. Setup installs the helper and merges hook configuration once; Codex hook trust must still be granted in the source. Requests expire after two minutes and never auto-approve. Generic ChatGPT chat, Claude Chat/Cowork, cloud and remote approvals are not connected. See [approval setup, contracts and verification](APPROVALS.md).

@@ -14,6 +14,16 @@ import IslandCore
         let accepted = ApprovalRequest.decode(try packet(), secret: secret, now: instant)!
         check(accepted.id == id && accepted.provider == .codex && accepted.tool == "Bash", "Valid local hook accepted")
         check(ApprovalRequest.decode(try packet(provider: "claude-code"), secret: secret, now: instant)?.provider == .claudeCode, "Claude contract accepted")
+        let originalHook = hook
+        for tool in ["apply_patch", "request_permissions", "mcp__example__action"] {
+            hook["tool_name"] = tool
+            hook["tool_input"] = ["permissions": ["file_system": ["read": ["/example/folder"]]], "reason": "Synthetic file-access request"]
+            let request = ApprovalRequest.decode(try packet(), secret: secret, now: instant)
+            let decodedDetails = try JSONSerialization.jsonObject(with: Data((request?.details ?? "{}").utf8)) as! NSDictionary
+            check(request?.tool == tool && decodedDetails.isEqual(to: hook),
+                  "All supported permission-hook tool types preserve full request details")
+        }
+        hook = originalHook
         check(ApprovalRequest.decode(try packet("wrong"), secret: secret, now: instant) == nil, "Forged token rejected")
         check(ApprovalRequest.decode(try packet(provider: "chatgpt-universal"), secret: secret, now: instant) == nil, "Unknown surface is not advertised as connected")
         check(ApprovalRequest.decode(try packet(created: instant.addingTimeInterval(-20)), secret: secret, now: instant) == nil, "Old replay rejected")

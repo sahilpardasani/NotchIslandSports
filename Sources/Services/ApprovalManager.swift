@@ -19,6 +19,7 @@ import IslandCore
                 guard let self, self.active, self.enabled, request.expires > Date(),
                       !self.requests.contains(where: { $0.id == request.id }) else { return }
                 self.requests.append(request)
+                self.status = "Receiving \(request.provider.label) permission requests."
             }
         }
         server.onRemoval = { [weak self] id in
@@ -67,7 +68,7 @@ import IslandCore
             try updated.write(to: config, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: config.path)
             enabled = true
-            status = provider == .codex ? "Codex hook installed. Review and trust it in /hooks, then restart the local session." : "Claude Code hook installed. Restart the local Code session; review hooks if prompted."
+            status = provider == .codex ? "Hook installed, awaiting source trust. In Codex /hooks, review and trust notch-approval-hook; then restart the local chat." : "Claude Code hook installed. Restart the local Code session; review hooks if prompted."
         } catch { status = "Could not connect. Existing settings were preserved where possible. See the approval setup guide." }
     }
     #if DEBUG

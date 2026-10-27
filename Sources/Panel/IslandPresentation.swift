@@ -7,7 +7,18 @@ final class IslandPresentation: ObservableObject {
     @Published private(set) var selection = ActivitySelection()
     @Published private(set) var merged: Bool
     @Published private(set) var compactCalendar = false
-    var collapsedActivity: IslandActivity { compactCalendar ? .calendar : (selection.primary ?? .sports) }
+    var collapsedActivity: IslandActivity {
+        // An urgent request must not disappear just because the menu bar cannot fit
+        // its satellite, or the user merged the ordinary activities. Keep selection
+        // intact so the prior score/media/calendar returns when the request clears.
+        let hasApproval = [selection.primary, selection.secondary, selection.tertiary].contains(.approval)
+            || selection.overflow.contains(.approval)
+        let approvalVisible = (!compactCalendar && selection.primary == .approval)
+            || (showsSecondary && selection.secondary == .approval)
+            || (showsTertiary && selection.tertiary == .approval)
+        if hasApproval && !approvalVisible { return .approval }
+        return compactCalendar ? .calendar : (selection.primary ?? .sports)
+    }
     @Published var secondaryOnLeft = true
     @Published var tertiaryOnLeft = false
     @Published var secondaryFits = true

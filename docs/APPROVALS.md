@@ -1,4 +1,4 @@
-# Approval requests — preview 1.6 build 10
+# Approval requests — preview 1.6 build 11
 
 ## What is connected
 
@@ -18,7 +18,7 @@ Official contracts: [OpenAI lifecycle hooks](https://learn.chatgpt.com/docs/hook
 
 1. Install the packaged app in a stable location and open **About → Configure**.
 2. Select **Connect Codex…** and/or **Connect Claude Code…**. This installs the bundled helper in your private Application Support folder and adds one PermissionRequest handler. Existing settings and unrelated hooks are preserved, with a private backup before a change.
-3. For Codex, review and trust the new handler in `/hooks`. Restart local sessions as required by the source. The app does not bypass hook trust, change permission modes or remove organizational restrictions.
+3. For Codex/local ChatGPT, open Codex CLI in Terminal (`codex`), enter `/hooks`, and review/trust the `notch-approval-hook` handler. Restart local sessions afterward. Installing the hook without this source-side trust is not enough: it is skipped until reviewed. The app does not bypass hook trust, change permission modes or remove organizational restrictions.
 4. Trigger a harmless request that genuinely requires permission in the source. The notch shows an orange **Approval needed** activity. Expand it to read all hook-supplied request fields and choose **Approve once**, **Deny**, or **Use app prompt**.
 
 Codex configuration: `hooks.json` under the app process's `CODEX_HOME` when set, otherwise `~/.codex/hooks.json`. Claude Code configuration: `~/.claude/settings.json`. Custom remote/configuration directories are not automatically discovered. Reconnecting is idempotent. Symlinked settings files are left untouched and require manual installation; for manual setup use a synchronous command handler with the private helper path, `--notch-approval codex` or `--notch-approval claude-code`, and a 130-second timeout. Disable **Approval requests** to stop the listener; installed handlers then return immediately to the normal prompt when no endpoint is available. To remove a handler entirely, remove only the command ending in `--notch-approval codex` or `--notch-approval claude-code` from the relevant PermissionRequest group; preserve other hooks.
@@ -26,7 +26,7 @@ Codex configuration: `hooks.json` under the app process's `CODEX_HOME` when set,
 ## Interaction and semantics
 
 - Pending requests receive an orange attention satellite without automatically expanding or stealing keyboard focus. A new request separates merged activities; the primary remains stable. Up to three slots remain visible. Additional activities remain reachable by swiping; Calendar still uses no slot.
-- Menu crowding can merge satellites. **Select Widget → Approvals** or sideways paging still reaches the request. This is urgency within the notch, not an entitlement to bypass macOS Focus or system notification settings.
+- If menu crowding or manual merging hides the approval satellite, the collapsed main notch temporarily shows the pending approval. Pull down opens the full request. The prior score/media selection is preserved and returns when the request clears or the satellite fits again. An already expanded page is never replaced. **Select Widget → Approvals** also reaches requests. This is urgency within the notch, not an entitlement to bypass macOS Focus or system notification settings.
 - The expanded view shows the complete JSON supplied by the hook in a selectable, scrollable view. It is not a transcript reader and cannot display context the source omitted. Requests above 256 KiB fall back to the source rather than showing truncated details with an approval button.
 - Approval applies only to the exact waiting connection/request ID. The app never executes the command itself, alters tool input or returns permanent permission changes. Resolving one request does not automatically select another for approval.
 - After two minutes, source cancellation, disconnect, app disable, sleep or lock, the connection returns without an approval decision. The ordinary source prompt remains responsible. An unavailable helper or app must never grant permission.
