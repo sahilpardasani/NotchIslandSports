@@ -2,6 +2,11 @@ import Foundation
 
 /// Reconciliation is a fallback; lifecycle and source events still refresh immediately.
 public enum EnergyPolicy {
+    /// Fast first recovery, bounded retries during persistent adapter failure.
+    public static func mediaRetry(failures: Int) -> TimeInterval {
+        [1.0, 2, 5, 15, 30][min(4, max(0, failures - 1))]
+    }
+
     public static func clockInterval(trusted: Bool, appRunning: Bool, setupVisible: Bool,
                                      hasTimers: Bool, runningTimer: Bool, lowPower: Bool) -> TimeInterval? {
         if !trusted { return setupVisible ? 1 : nil }

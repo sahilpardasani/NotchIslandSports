@@ -28,7 +28,7 @@ final class SystemMediaAdapter {
         let token = generation
         let child = Process(), pipe = Pipe()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        child.arguments = [script, framework, "stream", "--no-diff", "--micros", "--debounce=150"]
+        child.arguments = [script, framework, "stream", "--no-diff", "--micros", "--debounce=50", "--allow-missing-title"]
         child.standardOutput = pipe; child.standardError = FileHandle.nullDevice
         process = child; output = pipe
         child.terminationHandler = { [weak self] _ in

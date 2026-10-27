@@ -56,6 +56,26 @@ public enum ApprovalSocket {
         }
         return nil
     }
+    /// stdin carries one JSON object, not necessarily a newline-delimited record.
+    public static func readJSONObject(_ fd: Int32, timeout: Double, maximum: Int) -> Data? {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        var result = Data(), bytes = [UInt8](repeating: 0, count: 8192)
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            var descriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            let remaining = max(1, Int32((deadline - ProcessInfo.processInfo.systemUptime) * 1000))
+            let ready = poll(&descriptor, 1, remaining)
+            if ready < 0 && errno == EINTR { continue }
+            guard ready > 0 else { return nil }
+            let count = read(fd, &bytes, bytes.count)
+            if count < 0 && errno == EINTR { continue }
+            guard count > 0 else { return nil }
+            result.append(contentsOf: bytes.prefix(count))
+            guard result.count <= maximum else { return nil }
+            if (try? JSONSerialization.jsonObject(with: result)) is [String: Any] { return result }
+        }
+        return nil
+    }
+
     public static func privateFile(_ url: URL, maximum: Int = 4096) -> Data? {
         let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard fd >= 0 else { return nil }; defer { close(fd) }

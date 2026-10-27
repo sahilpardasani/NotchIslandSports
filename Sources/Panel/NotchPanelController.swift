@@ -101,7 +101,7 @@ final class NotchPanelController {
     }
 
     private func observe() {
-        approvals.$requests.map { !$0.isEmpty }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
+        approvals.$requests.map { $0.count }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         dataManager.$activeMatch.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             self?.queueUpdate()
         }.store(in: &cancellables)
@@ -167,7 +167,7 @@ final class NotchPanelController {
     }
 
     private var expandedHeight: CGFloat {
-        if presentation.selectedTab == .approval { return 360 }
+        if presentation.selectedTab == .approval { return approvals.requests.count > 1 ? 146 : 114 }
         if presentation.selectedTab == .calendar { return 420 }
         if presentation.selectedTab == .clock { return NativeClockView.contentHeight(timerCount: clock.timers.count) }
         if presentation.selectedTab == .music {

@@ -15,7 +15,7 @@ import IslandCore
     private var active = false
     init() {
         server.onRequest = { [weak self] request in
-            Task { @MainActor in
+            Task(priority: .userInitiated) { @MainActor in
                 guard let self, self.active, self.enabled, request.expires > Date(),
                       !self.requests.contains(where: { $0.id == request.id }) else { return }
                 self.requests.append(request)
@@ -29,7 +29,21 @@ import IslandCore
     }
     func start() { active = true; if enabled { startServer() } }
     func stop() { active = false; server.stop(); requests.removeAll() }
-    private func startServer() { server.start() }
+    private func startServer() {
+        // Keep an already connected helper current after replacing the app bundle.
+        // This never installs new hooks, changes their definitions or grants source trust.
+        let installed = ApprovalSocket.directory.appendingPathComponent("notch-approval-hook")
+        if let existing = ApprovalSocket.privateFile(installed, maximum: 20_000_000),
+           let bundled = Bundle.main.resourceURL?.appendingPathComponent("notch-approval-hook"),
+           let replacement = try? Data(contentsOf: bundled), existing != replacement {
+            do {
+                try ApprovalSocket.ensurePrivateDirectory(ApprovalSocket.directory)
+                try replacement.write(to: installed, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: installed.path)
+            } catch { status = "Could not update the connected approval helper. Reconnect in About → Configure." }
+        }
+        server.start()
+    }
     func decide(_ id: UUID, _ decision: ApprovalDecision) {
         guard active, enabled, let request = requests.first(where: { $0.id == id }), request.expires > Date() else { return }
         // Server checks the same ID and deadline against its still-open connection.

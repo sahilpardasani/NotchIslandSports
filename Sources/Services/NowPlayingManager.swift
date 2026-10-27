@@ -16,6 +16,7 @@ struct NowPlayingTrack: Equatable {
     let artwork: Data?
     let dominantColor: Color
     var sourceBundleID: String? = nil
+    var hasSourceTitle = true
 }
 
 // MARK: - NowPlayingManager
@@ -42,7 +43,7 @@ final class NowPlayingManager: ObservableObject {
         }
     }
     var canControl: Bool {
-        guard let id = currentTrack?.sourceBundleID else { return false }
+        guard currentTrack?.hasSourceTitle == true, let id = currentTrack?.sourceBundleID else { return false }
         return adapter.listening || NativeMediaPlayer(rawValue: id) != nil
     }
     func elapsedTime() -> TimeInterval { positionAnchor.value(at: ProcessInfo.processInfo.systemUptime) }
@@ -60,6 +61,7 @@ final class NowPlayingManager: ObservableObject {
     private var terminationObserver: NSObjectProtocol?
     private let adapter = SystemMediaAdapter()
     private var adapterRetry: DispatchWorkItem?
+    private var adapterFailures = 0
     private var timer: Timer?
     private var lowPower = false
     private var mediaRemoteBundle: CFBundle?
@@ -74,9 +76,11 @@ final class NowPlayingManager: ObservableObject {
             guard let self, self.isActive, self.enabled else { return }
             self.clearSession()
             self.controlError = "Media connection unavailable. Retrying automatically."
+            self.adapterRetry?.cancel()
+            self.adapterFailures += 1
             let retry = DispatchWorkItem { [weak self] in self?.updateNowPlayingInfo() }
             self.adapterRetry = retry
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: retry)
+            DispatchQueue.main.asyncAfter(deadline: .now() + EnergyPolicy.mediaRetry(failures: self.adapterFailures), execute: retry)
         }
     }
     
@@ -115,6 +119,7 @@ final class NowPlayingManager: ObservableObject {
     func startPolling() {
         guard !isActive else { return }
         isActive = true
+        adapterFailures = 0
         terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
                 let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
@@ -216,6 +221,7 @@ final class NowPlayingManager: ObservableObject {
               !NSRunningApplication.runningApplications(withBundleIdentifier: snapshot.bundleID).isEmpty,
               sessionPresence.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: snapshot.playing)
         else { clearSession(); return }
+        adapterFailures = 0
         if controlError != nil { controlError = nil }
         if snapshot.artwork != lastArtwork {
             lastArtwork = snapshot.artwork
@@ -227,7 +233,8 @@ final class NowPlayingManager: ObservableObject {
             rate: snapshot.rate, duration: snapshot.duration)
         let track = NowPlayingTrack(title: snapshot.title, artist: snapshot.artist, album: snapshot.album,
             duration: snapshot.duration, elapsedTime: position, isPlaying: snapshot.playing,
-            artwork: snapshot.artwork, dominantColor: lastColor, sourceBundleID: snapshot.bundleID)
+            artwork: snapshot.artwork, dominantColor: lastColor, sourceBundleID: snapshot.bundleID,
+            hasSourceTitle: snapshot.hasSourceTitle)
         publish(track, anchor: anchor)
     }
 
@@ -238,7 +245,7 @@ final class NowPlayingManager: ObservableObject {
         let metadataChanged = currentTrack.map {
             $0.title != track.title || $0.artist != track.artist || $0.album != track.album ||
             $0.duration != track.duration || $0.isPlaying != track.isPlaying ||
-            $0.sourceBundleID != track.sourceBundleID || $0.artwork != track.artwork
+            $0.sourceBundleID != track.sourceBundleID || $0.hasSourceTitle != track.hasSourceTitle || $0.artwork != track.artwork
         } ?? true
         positionAnchor = anchor
         if metadataChanged || correction { currentTrack = track }

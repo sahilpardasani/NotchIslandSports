@@ -9,7 +9,7 @@ final class ApprovalServer {
     var onError: ((String) -> Void)?
     private let directory: URL
     init(directory: URL = ApprovalSocket.directory) { self.directory = directory }
-    private let queue = DispatchQueue(label: "com.notchislandsports.approvals", qos: .utility)
+    private let queue = DispatchQueue(label: "com.notchislandsports.approvals", qos: .userInitiated)
     private var listener: DispatchSourceRead?
     private var lockFD: Int32 = -1
     private var socketFolder: String?

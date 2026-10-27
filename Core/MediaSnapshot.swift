@@ -3,6 +3,7 @@ import Foundation
 /// Complete snapshots only; malformed or diff packets cannot resurrect old metadata.
 public struct MediaSnapshot: Equatable, Sendable {
     public let title: String
+    public let hasSourceTitle: Bool
     public let artist: String
     public let album: String
     public let bundleID: String
@@ -19,9 +20,11 @@ public struct MediaSnapshot: Equatable, Sendable {
               packet["type"] as? String == "data",
               packet["diff"] as? Bool == false,
               let value = packet["payload"] as? [String: Any],
-              let title = value["title"] as? String, !title.trimmingCharacters(in: .whitespaces).isEmpty,
               let bundle = value["bundleIdentifier"] as? String, !bundle.isEmpty,
               let playing = value["playing"] as? Bool else { return nil }
+        let sourceTitle = (value["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasTitle = !sourceTitle.isEmpty
+        let title = hasTitle ? sourceTitle : "Playing media"
         func number(_ key: String) -> Double {
             let n = (value[key] as? NSNumber)?.doubleValue ?? 0
             return n.isFinite ? max(0, n) : 0
@@ -31,7 +34,7 @@ public struct MediaSnapshot: Equatable, Sendable {
             guard encoded.utf8.count <= 5_400_000, let data = Data(base64Encoded: encoded), data.count <= 4_000_000 else { return nil }
             return data
         }
-        return MediaSnapshot(title: String(title.prefix(1024)), artist: String((value["artist"] as? String ?? "").prefix(512)),
+        return MediaSnapshot(title: String(title.prefix(1024)), hasSourceTitle: hasTitle, artist: String((value["artist"] as? String ?? "").prefix(512)),
             album: String((value["album"] as? String ?? "").prefix(512)), bundleID: bundle,
             playing: playing, duration: number("durationMicros") / 1_000_000,
             elapsed: number("elapsedTimeMicros") / 1_000_000, rate: playing ? (value["playbackRate"] == nil ? 1 : number("playbackRate")) : 0,

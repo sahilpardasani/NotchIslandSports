@@ -53,7 +53,7 @@ import IslandCore
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .approval ? 360 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
+                contentHeight: activity == .approval ? 114 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
             let occupied = approvalCrowded ? [CGRect(x: 0, y: 768, width: 1200, height: 32)] : scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
                 CGRect(x: 960, y: 740, width: 240, height: 60)]

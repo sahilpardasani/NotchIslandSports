@@ -1,9 +1,19 @@
-# Preview 1.6 (build 12) — lower background battery work
+# Preview 1.6 (build 13) — faster media and concise approvals
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 12 battery and artwork changes (current)
+## Build 13 media and approval follow-up (current)
+
+The media adapter accepts system-reported playback before its title arrives, displaying “Playing media” until metadata appears. This removes the title gate without inventing a video title, scanning tabs or reading browsing history. Untitled media controls stay disabled until exact source/title validation is possible. The same feed accepts TV, Podcasts, streaming apps and browsers; it has no Music/Spotify-only whitelist. Netflix, Prime Video and private windows work only when their player exposes system Now Playing state. Private/DRM content that withholds that state cannot be detected through this integration. Live compatibility with those apps has not been verified.
+
+The event coalescing delay is 50 ms instead of 150 ms. Recovery after helper failure starts at one second, backs off through 2/5/15 seconds and caps at 30 seconds. There is no new idle polling loop. This reduces app-side latency; source event timing is outside the app’s control.
+
+Approvals now use a compact one-line action preview and the existing decision buttons. Details opens the original full request on demand. The input reader accepts a complete JSON object immediately, including pretty-printed input without a terminating newline or EOF. This fixes the previous first-line parser’s rejection of multiline payloads. Delivery uses a user-initiated event queue, never periodic notification scraping. An already-connected helper is updated from the app bundle on startup, preserving hook configuration and source trust. Fresh installations still require the existing Connect and source review flow.
+
+The full battery/artwork work from build 12 remains. Version is 1.6.0, bundle/About build 13. No real agent action was approved in tests and end-to-end source-to-screen latency has not been measured.
+
+## Build 12 battery and artwork changes retained
 
 The small media satellite now displays cached album/video artwork instead of animated bars. When the player supplies no artwork, it displays a static music-note tile. Tapping/pulling down still opens controls; hold/swipe behavior and full media title scrolling are unchanged.
 

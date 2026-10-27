@@ -535,3 +535,7 @@ Build 11 also keeps received approvals visible: if a pending approval pill is hi
 ## Battery follow-up — build 12
 
 Implemented lower background catalog frequency, warm-resume reuse, idle Clock timer removal, diff-only Clock publications, bounded native countdown reconciliation and media position/publication separation with a progress-only timeline. Existing live score timing, UI/gestures and approval semantics remain. See [BATTERY.md](BATTERY.md) for exact tradeoffs and regression validation; no measured battery percentage is claimed.
+
+## Media and approval follow-up — build 13
+
+Untitled, source-reported playback can create a slot while metadata loads, with controls guarded until source/title verification is possible. The shared system feed is app-agnostic; private browsing and streaming visibility remain dependent on the source and DRM behavior. Media event coalescing and failure recovery are faster without new idle polling. Approvals now show a single action line with on-demand full details and parse the complete stdin JSON object instead of a line. See PREVIEW-1.6.md and APPROVALS.md for scope and validation limits.

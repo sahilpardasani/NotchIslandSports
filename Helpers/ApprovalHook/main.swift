@@ -10,7 +10,7 @@ func run() {
           let endpoint = ApprovalSocket.privateFile(ApprovalSocket.directory.appendingPathComponent("endpoint.json")),
           let config = try? JSONSerialization.jsonObject(with: endpoint) as? [String: String],
           let secret = config["token"], let path = config["socket"], var address = ApprovalSocket.address(path) else { return }
-    guard let input = ApprovalSocket.readLine(STDIN_FILENO, timeout: 2, maximum: ApprovalRequest.maximumBytes),
+    guard let input = ApprovalSocket.readJSONObject(STDIN_FILENO, timeout: 2, maximum: ApprovalRequest.maximumBytes),
           let hook = try? JSONSerialization.jsonObject(with: input) as? [String: Any] else { return }
     let id = UUID()
     guard let packet = try? JSONSerialization.data(withJSONObject: ["version": 1, "id": id.uuidString,

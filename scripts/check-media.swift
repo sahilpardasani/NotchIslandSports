@@ -27,7 +27,16 @@ import IslandCore
         check(MediaSnapshot.decode(Data("not json".utf8)) == nil, "Invalid JSON rejected")
         check(MediaSnapshot.decode(Data(repeating: 1, count: 8_000_001)) == nil, "Oversized packet bounded")
         payload["bundleIdentifier"] = "com.apple.Safari"; payload["title"] = "  "
-        check(MediaSnapshot.decode(try packet(payload)) == nil, "Blank title rejected")
+        check(MediaSnapshot.decode(try packet(payload))?.hasSourceTitle == false, "Untitled playback appears while metadata loads")
+        check(MediaSnapshot.decode(try packet(payload))?.title == "Playing media", "Untitled playback uses an explicit generic label")
+        for bundle in ["com.apple.TV", "com.apple.podcasts", "com.amazon.Amazon-Video-Living-Room", "com.apple.Safari", "com.google.Chrome"] {
+            var source = payload; source["bundleIdentifier"] = bundle; source["title"] = "Source-reported episode"
+            check(MediaSnapshot.decode(try packet(source))?.bundleID == bundle, "System-reported players are not restricted to Music/Spotify")
+        }
+        var withheld = payload; withheld.removeValue(forKey: "playing")
+        check(MediaSnapshot.decode(try packet(withheld)) == nil, "Missing playback evidence cannot create an activity")
+        check(EnergyPolicy.mediaRetry(failures: 1) == 1 && EnergyPolicy.mediaRetry(failures: 2) == 2, "Early media recovery is prompt")
+        check(EnergyPolicy.mediaRetry(failures: 1000) == 30, "Repeated adapter failure remains bounded")
         check(MediaMotion.allowed(playing: true, active: true, visible: true, reduceMotion: false, lowPower: false), "Visible playback animates")
         check(!MediaMotion.allowed(playing: false, active: true, visible: true, reduceMotion: false, lowPower: false), "Paused playback stops motion")
         check(!MediaMotion.allowed(playing: true, active: false, visible: true, reduceMotion: false, lowPower: false), "Stopped provider stops motion")

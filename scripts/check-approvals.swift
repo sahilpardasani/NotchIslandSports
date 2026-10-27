@@ -64,6 +64,27 @@ import IslandCore
         check(ApprovalSocket.readLine(pipes[0], timeout: 1, maximum: 4096) == raw, "Hook stdin accepts JSON ending at EOF without newline")
         close(pipes[0])
 
+        check(ApprovalSummary.line(tool: "Bash", input: ["command": "npm test", "description": "Unrelated description"]) == "Run: npm test", "Summary uses actual command, not a reassuring description")
+        check(ApprovalSummary.line(tool: "exec_command", input: ["cmd": "echo one\necho two"]).contains("↵"), "Multiline command remains visibly multiline in one-line preview")
+        check(ApprovalSummary.line(tool: "Edit", input: ["file_path": "/example/app.swift"]) == "Edit: /example/app.swift", "File target is visible")
+        let scope = ApprovalSummary.line(tool: "request_permissions", input: ["permissions": ["file_system": ["read": ["/example/a"], "write": ["/example/b"]], "network": ["enabled": true]]])
+        check(scope.contains("read: /example/a") && scope.contains("write: /example/b") && scope.contains("network access"), "Permission summary retains requested scopes")
+        check(ApprovalSummary.line(tool: "apply_patch", input: "*** Begin Patch\n*** Delete File: file.txt\n*** End Patch") == "Delete File: file.txt", "Patch preview identifies destructive operation")
+        check(ApprovalSummary.line(tool: "mcp__example__action", input: [:]) == "Use mcp__example__action", "Unknown tool remains explicit")
+        check(accepted.summary.contains("echo 'approval test'") && accepted.details.contains("Synthetic transport test"), "One-line preview preserves full request separately")
+        var openPipe: [Int32] = [0, 0]; pipe(&openPipe)
+        let prettyJSON = Data("{\n  \"hook\": true\n}".utf8)
+        prettyJSON.withUnsafeBytes { _ = Darwin.write(openPipe[1], $0.baseAddress, $0.count) }
+        let began = ProcessInfo.processInfo.systemUptime
+        check(ApprovalSocket.readJSONObject(openPipe[0], timeout: 2, maximum: 4096) == prettyJSON, "Pretty JSON arrives without newline or EOF")
+        check(ProcessInfo.processInfo.systemUptime - began < 1, "Complete stdin does not wait for input timeout")
+        close(openPipe[0]); close(openPipe[1])
+        var badPipe: [Int32] = [0, 0]; pipe(&badPipe)
+        let incomplete = Data("{\"hook\":".utf8)
+        incomplete.withUnsafeBytes { _ = Darwin.write(badPipe[1], $0.baseAddress, $0.count) }; close(badPipe[1])
+        check(ApprovalSocket.readJSONObject(badPipe[0], timeout: 1, maximum: 4096) == nil, "Partial stdin never routes a partial request")
+        close(badPipe[0])
+
         if ProcessInfo.processInfo.environment["NOTCH_APPROVAL_POLICY_ONLY"] == "1" {
             print("Passed \(count) approval policy/configuration checks; socket tests explicitly skipped in this sandbox.")
             return
@@ -94,8 +115,10 @@ import IslandCore
             precondition(result == 0); return fd
         }
         let liveID = UUID(), fd = connect()
+        let sentAt = ProcessInfo.processInfo.systemUptime
         _ = ApprovalSocket.send(try packet(config["token"]!, id: liveID, created: Date()), to: fd)
-        check(arrived.wait(timeout: .now() + 2) == .success, "Real local socket delivers request")
+        check(arrived.wait(timeout: .now() + 1) == .success, "Real local socket delivers request within one second")
+        print("Synthetic local socket delivery: \(Int((ProcessInfo.processInfo.systemUptime - sentAt) * 1000)) ms (excludes source scheduling and display).")
         var pollState = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
         check(poll(&pollState, 1, 30) == 0, "Pending socket never automatically approves")
         server.decide(UUID(), .allow)

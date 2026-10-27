@@ -7,7 +7,7 @@ struct ApprovalCompactView: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: "exclamationmark.bubble.fill")
-            Text(minimal ? "\(manager.requests.count)" : "Approval needed")
+            Text(minimal ? "\(manager.requests.count)" : (manager.requests.first?.summary ?? "Approval needed"))
                 .font(.system(size: 11, weight: .semibold))
         }.foregroundColor(.orange).lineLimit(1)
             .accessibilityLabel("\(manager.requests.count) pending approval requests")
@@ -17,6 +17,7 @@ struct ApprovalExpandedView: View {
     @ObservedObject var manager: ApprovalManager
     @State private var selected: UUID?
     @State private var submitting: UUID?
+    @State private var detailsVisible = false
     private var current: ApprovalRequest? {
         if let selected { return manager.requests.first { $0.id == selected } }
         return manager.requests.first
@@ -25,22 +26,27 @@ struct ApprovalExpandedView: View {
         VStack(alignment: .leading, spacing: 10) {
             if let request = current {
                 HStack {
-                    Label("Approval needed", systemImage: "exclamationmark.bubble.fill").foregroundColor(.orange)
+                    Label(request.provider == .codex ? "ChatGPT / Codex" : "Claude Code", systemImage: "exclamationmark.bubble.fill").foregroundColor(.orange)
                     Spacer()
-                    Text(request.provider.label).foregroundColor(.secondary)
+                    Button("Details") { detailsVisible = true }
+                        .buttonStyle(.plain).foregroundColor(.secondary)
+                        .popover(isPresented: $detailsVisible) {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(request.summary).font(.headline).textSelection(.enabled)
+                                    Text(request.details).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                                }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                            }.frame(width: 560, height: 360)
+                        }
                 }.font(.system(size: 13, weight: .semibold))
                 if manager.requests.count > 1 {
-                    Picker("Pending request", selection: Binding(get: { request.id }, set: { selected = $0; submitting = nil })) {
+                    Picker("Pending request", selection: Binding(get: { request.id }, set: { selected = $0; submitting = nil; detailsVisible = false })) {
                         ForEach(manager.requests) { item in Text("\(item.provider.label) · \(item.tool)").tag(item.id) }
                     }.pickerStyle(.menu)
                 }
-                Text(request.tool).font(.headline)
-                Text("Full hook request · expires after two minutes").font(.caption).foregroundColor(.secondary)
-                ScrollView {
-                    Text(request.details).font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                }.frame(maxHeight: .infinity).background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                Text(request.summary).font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1).truncationMode(.tail)
+                    .accessibilityLabel(request.summary)
                 HStack(spacing: 12) {
                     Button("Use app prompt") { act(.passthrough, request: request) }
                     Spacer()
@@ -48,7 +54,6 @@ struct ApprovalExpandedView: View {
                     Button("Approve once") { act(.allow, request: request) }
                         .buttonStyle(.borderedProminent).tint(.orange)
                 }.disabled(submitting == request.id || request.expires <= Date())
-                Text("Only this request. No permanent permission is granted.").font(.caption2).foregroundColor(.secondary)
             } else {
                 Spacer()
                 Label(manager.requests.isEmpty ? "No pending approvals" : "This request is no longer pending", systemImage: "checkmark.bubble")
@@ -62,6 +67,7 @@ struct ApprovalExpandedView: View {
                 Spacer()
             }
         }.onAppear { if selected == nil { selected = manager.requests.first?.id } }
+        .onChange(of: manager.requests.map(\.id)) { _ in detailsVisible = false }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
     }
     private func act(_ decision: ApprovalDecision, request: ApprovalRequest) {

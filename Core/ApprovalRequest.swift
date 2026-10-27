@@ -13,6 +13,7 @@ public struct ApprovalRequest: Identifiable, Equatable, Sendable {
     public let session: String
     public let tool: String
     public let details: String
+    public let summary: String
     public let expires: Date
     public static let maximumBytes = 262_144
     public static func decode(_ data: Data, secret: String, now: Date = Date()) -> Self? {
@@ -31,7 +32,7 @@ public struct ApprovalRequest: Identifiable, Equatable, Sendable {
               hook["tool_input"] != nil,
               let formatted = try? JSONSerialization.data(withJSONObject: hook, options: [.prettyPrinted, .sortedKeys]),
               let details = String(data: formatted, encoding: .utf8) else { return nil }
-        return .init(id: id, provider: provider, session: session, tool: tool, details: details,
+        return .init(id: id, provider: provider, session: session, tool: tool, details: details, summary: ApprovalSummary.line(tool: tool, input: hook["tool_input"]),
                      expires: Date(timeIntervalSince1970: created + 120))
     }
     public static func response(id: UUID, decision: ApprovalDecision) -> Data {
@@ -79,5 +80,42 @@ public enum ApprovalHookConfiguration {
         if !remove { groups.append(["matcher": "*", "hooks": [["type": "command", "command": command, "timeout": 130]]]) }
         hooks["PermissionRequest"] = groups; root["hooks"] = hooks
         return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    }
+}
+
+/// A deterministic preview of the actual action; the full request is always retained.
+public enum ApprovalSummary {
+    public static func line(tool: String, input: Any?) -> String {
+        let fields = input as? [String: Any] ?? [:]
+        func clean(_ text: String) -> String {
+            String(text.replacingOccurrences(of: "\n", with: " ↵ ")
+                .replacingOccurrences(of: "\r", with: " ")
+                .replacingOccurrences(of: "\t", with: " ").prefix(300))
+        }
+        if let command = (fields["command"] ?? fields["cmd"]) as? String, !command.isEmpty {
+            return "Run: " + clean(command)
+        }
+        if let permissions = fields["permissions"] as? [String: Any] {
+            var scopes: [String] = []
+            if let files = permissions["file_system"] as? [String: Any] {
+                for key in ["read", "write"] {
+                    if let paths = files[key] as? [String], !paths.isEmpty {
+                        scopes.append("\(key): " + paths.joined(separator: ", "))
+                    }
+                }
+            }
+            if (permissions["network"] as? [String: Any])?["enabled"] as? Bool == true { scopes.append("network access") }
+            if !scopes.isEmpty { return "Allow " + clean(scopes.joined(separator: "; ")) }
+        }
+        if let path = (fields["file_path"] ?? fields["path"]) as? String, !path.isEmpty {
+            return clean(tool + ": " + path)
+        }
+        if let patch = input as? String, tool.contains("patch") {
+            let paths = patch.components(separatedBy: "\n").filter {
+                $0.hasPrefix("*** Update File:") || $0.hasPrefix("*** Add File:") || $0.hasPrefix("*** Delete File:")
+            }.map { $0.replacingOccurrences(of: "*** ", with: "") }
+            if !paths.isEmpty { return clean(paths.joined(separator: "; ")) }
+        }
+        return "Use " + clean(tool)
     }
 }
