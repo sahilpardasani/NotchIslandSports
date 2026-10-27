@@ -37,7 +37,7 @@ import IslandCore
     func connect(_ provider: ApprovalProvider) {
         do {
             let directory = ApprovalSocket.directory
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try ApprovalSocket.ensurePrivateDirectory(directory)
             guard let bundled = Bundle.main.resourceURL?.appendingPathComponent("notch-approval-hook"),
                   FileManager.default.isExecutableFile(atPath: bundled.path) else { throw CocoaError(.fileReadNoSuchFile) }
             let helper = directory.appendingPathComponent("notch-approval-hook")
@@ -51,10 +51,15 @@ import IslandCore
                 config = codexDirectory.appendingPathComponent("hooks.json")
             } else { config = home.appendingPathComponent(".claude/settings.json") }
             try FileManager.default.createDirectory(at: config.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: config.path),
+               attributes[.type] as? FileAttributeType == .typeSymbolicLink {
+                status = "Settings use a symbolic link. Add the hook manually using the setup guide; the link was preserved."
+                return
+            }
             let existing = FileManager.default.fileExists(atPath: config.path) ? try Data(contentsOf: config) : nil
             let command = ApprovalHookConfiguration.command(helper: helper.path, provider: provider)
             let updated = try ApprovalHookConfiguration.merge(existing, command: command)
-            if let existing {
+            if let existing, existing != updated {
                 let backup = directory.appendingPathComponent("\(provider.rawValue)-settings-\(UUID().uuidString).json")
                 try existing.write(to: backup, options: .atomic)
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)

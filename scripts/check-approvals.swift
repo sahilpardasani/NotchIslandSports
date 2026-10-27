@@ -64,6 +64,11 @@ import IslandCore
         let arrived = DispatchSemaphore(value: 0)
         server.onRequest = { _ in arrived.signal() }
         server.onError = { print("IPC fixture: \($0)"); fflush(stdout) }
+        try ApprovalSocket.ensurePrivateDirectory(directory)
+        let unsafe = directory.appendingPathComponent("unsafe")
+        try FileManager.default.createDirectory(at: unsafe, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o755])
+        do { try ApprovalSocket.ensurePrivateDirectory(unsafe); check(false, "Public directory must be rejected") }
+        catch { check(true, "Installer refuses a public credential directory") }
         server.start()
         let endpoint = directory.appendingPathComponent("endpoint.json")
         let deadline = Date().addingTimeInterval(3)

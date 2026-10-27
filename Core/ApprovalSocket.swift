@@ -6,6 +6,12 @@ public enum ApprovalSocket {
     public static var directory: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/NotchIslandSports/Approvals", isDirectory: true)
     }
+    public static func ensurePrivateDirectory(_ directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        var info = stat()
+        guard lstat(directory.path, &info) == 0, info.st_uid == geteuid(), info.st_mode & S_IFMT == S_IFDIR,
+              info.st_mode & 0o077 == 0 else { throw CocoaError(.fileWriteNoPermission) }
+    }
     public static func address(_ path: String) -> sockaddr_un? {
         var value = sockaddr_un(); value.sun_family = sa_family_t(AF_UNIX)
         let bytes = Array(path.utf8) + [0]

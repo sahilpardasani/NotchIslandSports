@@ -35,10 +35,7 @@ final class ApprovalServer {
     private func listen() {
         guard listener == nil else { return }
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            var info = stat()
-            guard lstat(directory.path, &info) == 0, info.st_uid == geteuid(), info.st_mode & S_IFMT == S_IFDIR,
-                  info.st_mode & 0o077 == 0 else { throw CocoaError(.fileWriteNoPermission) }
+            try ApprovalSocket.ensurePrivateDirectory(directory)
             lockFD = open(directory.appendingPathComponent("listener.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW | O_CLOEXEC, 0o600)
             guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else { throw CocoaError(.fileLocking) }
             var template = Array("/tmp/nis-approval-\(geteuid()).XXXXXX".utf8CString)
