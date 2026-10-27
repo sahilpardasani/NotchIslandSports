@@ -1,13 +1,21 @@
-# Preview 1.6 (build 10) — native media, compact Calendar and adaptive placement
+# Preview 1.6 (build 11) — restored centered score layout
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 10 approvals (current)
+## Build 11 layout correction (current)
+
+Fixes the screenshot regression where the primary became a large blank camera section followed by both scores crammed on the right. Menu fallback used to reserve the whole left side and relocate both score labels into the right ear. The primary now keeps equal ears on opposite sides of the physical camera, the same compact height and a stable center through menu changes and expansion. Removed the asymmetric renderer so it cannot be reintroduced by a stale presentation value. The compact cricket team and multi-innings score scale together instead of sacrificing the team abbreviation first. Title scrolling is unchanged.
+
+Menu-aware placement now applies only to satellite pills: they move to a free side or hide when neither side fits, with their activities still accessible by swiping. The primary remains centered even with long app menus. This deliberately prioritizes a stable, readable score layout; it cannot guarantee that unusually long macOS menus never intersect the primary.
+
+Version stays 1.6.0; bundle/About build is 11. Approval hooks, native media/Clock, Calendar, merge gestures and the no-hover policy are preserved. Regression checks cover unavailable menu geometry, either crowded side, both sides crowded, merged state, expansion and a display with a negative origin. Actual-view renders include the supplied NAGA `187 & 46/4` / SIKM `184` score with fallback placement. Live display appearance remains a device check.
+
+## Build 10 approvals retained
 
 Adds local Codex and Claude Code PermissionRequest hooks, including supported desktop coding sessions, with an orange pending activity, full hook request details and Approve once / Deny / Use app prompt controls. Setup installs the helper and merges hook configuration once; Codex hook trust must still be granted in the source. Requests expire after two minutes and never auto-approve. Generic ChatGPT chat, Claude Chat/Cowork, cloud and remote approvals are not connected. See [approval setup, contracts and verification](APPROVALS.md).
 
-Bundle/About build is 10; version stays 1.6.0. Existing no-hover behavior, six top-level menu items, native Clock, Calendar, sports and media remain. The approval entry is inside Select Widget.
+Build 10 introduced approvals; version remains 1.6.0. Existing no-hover behavior, six top-level menu items, native Clock, Calendar, sports and media remain. The approval entry is inside Select Widget.
 
 ## Build 9 changes retained
 
@@ -17,7 +25,7 @@ These changes originated in build 9 and remain; they replace build 8 behavior wh
 - If a system transport command fails for either native player, a fixed AppleScript command targets that exact app only after checking the displayed title, bundle ID, current system player and running PID again. Play/pause, previous/next and ±15-second seek are covered. Automation consent may be requested on first fallback use. Browser failures never fall through to Music or Spotify. Detection still depends on experimental/private MediaRemote; native fallback is transport only, not an independent discovery API. Native app playback has not been verified end-to-end here.
 - Swiping to Calendar stays collapsed, displaying the current/next same-day event. Pull down explicitly opens the agenda; swipe up returns to compact Calendar. Calendar never occupies a live-activity slot and no events are deleted or changed.
 - A plain inward drag on either small pill merges all satellites into the primary. It follows the pill's actual side after relocation. Hold and swipe on the primary restores separate activities; keyboard/accessibility actions remain available.
-- Compact positioning considers application-menu and status-window bounds. Crowding on one side moves content and satellite pills to the other; excess pills merge if no gap fits. The physical camera stays covered. The reader is debounced and event-driven, bounds work on a utility queue, stops during suspension, and publishes changed geometry only. No new idle polling loop, screen recording or menu-title collection is added.
+- Compact positioning considers application-menu and status-window bounds. Build 11 keeps primary content centered; crowding on one side moves satellite pills to the other and hides excess pills if no gap fits. The physical camera stays covered. The reader is debounced and event-driven, bounds work on a utility queue, stops during suspension, and publishes changed geometry only. No new idle polling loop, screen recording or menu-title collection is added.
 - Accurate application-menu bounds use already-granted Accessibility permission. When unavailable, reserve the app-menu side conservatively, plus 240 points for right-side system controls. Placement remains best effort: macOS does not expose every status item consistently; re-evaluation occurs on app/window/layout/display changes. Expanded panels still open centered under the camera.
 - Expanded media has curved shoulders and a lower contour around playback controls and the swipe handle. Missing artwork uses a circular music emblem. Actual album artwork remains intact.
 - Panel backing uses sRGB and opaque black content. Software cannot eliminate the physical camera housing's optical reflections or make it invisible from every viewing angle.
@@ -110,4 +118,4 @@ The main collapsed cricket island also shows only team abbreviations and scores,
 
 - Play a song in Spotify, then Apple Music. Verify the one media slot switches source and artwork, pause/resume, previous/next, and ±15 seconds on seekable local tracks. Quit the displayed player: its stale pill must disappear. Check native playback with no browser running. Deny Automation: fallback must fail visibly without opening another app or changing playback elsewhere.
 - With three activities, swipe either satellite toward the camera without holding. Only the primary remains. Provider updates must not undo the merge; hold and swipe on the primary to split again.
-- Switch between short and long app menus and multiple displays, with and without Accessibility permission. Compact pills should relocate or merge before overlapping measured menus. Verify no hover behavior and no idle layout/AX loop.
+- Switch between short and long app menus and multiple displays, with and without Accessibility permission. Satellite pills should relocate or hide before overlapping measured menus; the primary must remain centered with one score on each side. Verify no hover behavior and no idle layout/AX loop.

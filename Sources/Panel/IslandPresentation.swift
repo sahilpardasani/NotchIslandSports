@@ -12,7 +12,6 @@ final class IslandPresentation: ObservableObject {
     @Published var tertiaryOnLeft = false
     @Published var secondaryFits = true
     @Published var tertiaryFits = true
-    @Published var compactInsets: CompactNotchInsets?
     @Published var selectedTab: IslandActivity = .sports
     @Published var cameraHeight: CGFloat = 0
     @Published var expandedPanelHeight: CGFloat = 520

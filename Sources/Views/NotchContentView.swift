@@ -184,7 +184,6 @@ struct NotchContentView: View {
     private func compactSurface(progress: CGFloat) -> some View {
         Button { presentation.open(presentation.collapsedActivity) } label: {
             compactPage.frame(maxWidth: .infinity, maxHeight: .infinity)
-                .environment(\.compactNotchInsets, presentation.compactInsets)
         }
         .buttonStyle(.plain)
         .frame(height: compactHeight)

@@ -201,19 +201,16 @@ struct CollapsedScoreView: View {
                     }
             }
             
-            Text("🏏")
-            
-            Text(match.awayTeamAbbrev)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+            // Fit the team and multi-innings score together instead of truncating the
+            // abbreviation first when the camera leaves a narrow ear.
+            (Text("🏏 " + match.awayTeamAbbrev + " ")
                 .foregroundColor(.white)
-                .lineLimit(1)
-                .layoutPriority(1)
-            
-            Text(CompactActivityText.score(match.awayScore))
+             + Text(CompactActivityText.score(match.awayScore))
+                .foregroundColor(isWinner(match: .cricket(match), isHome: false) ? Color(hex: "E6FF00") : .white))
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(isWinner(match: .cricket(match), isHome: false) ? Color(hex: "E6FF00") : .white)
                 .lineLimit(1)
-                .layoutPriority(2)
+                .minimumScaleFactor(0.75)
+
         }
     }
     

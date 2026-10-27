@@ -205,7 +205,6 @@ final class NotchPanelController {
             CGRect(x: screen.frame.maxX - 240, y: layout.primary.maxY - 60, width: 240, height: 60)]
         let placement = MenuBarPlacement.layout(base: layout, screen: screen.frame, occupied: occupiedMenuFrames.isEmpty ? fallback : occupiedMenuFrames,
             expanded: presentation.expanded, satelliteCount: count)
-        if !presentation.expanded, presentation.compactInsets != placement.insets { presentation.compactInsets = placement.insets }
         if presentation.secondaryFits != (placement.secondary != nil) { presentation.secondaryFits = placement.secondary != nil }
         if presentation.tertiaryFits != (placement.tertiary != nil) { presentation.tertiaryFits = placement.tertiary != nil }
         if let frame = placement.secondary, presentation.secondaryOnLeft != (frame.midX < layout.centerX) { presentation.secondaryOnLeft = frame.midX < layout.centerX }

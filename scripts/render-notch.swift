@@ -18,11 +18,16 @@ import IslandCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-menu-crowded", nil),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
                                   ("notch-approval-expanded", .approval), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+            let scoreRegression = name.hasPrefix("notch-score-")
+            data.activeMatch = scoreRegression ? .cricket(CricketMatch(id: "layout-regression", status: .unknown,
+                homeTeam: "Sikkim", awayTeam: "Nagaland", homeTeamAbbrev: "SIKM", awayTeamAbbrev: "NAGA",
+                homeScore: "184", awayScore: "187 & 46/4", statusText: ""))
+                : MockDataProvider.getMockMatches().first { $0.sportType == .cricket }
             let clock = NativeClockManager.visualFixture(paused: name == "notch-clock-paused",
                 controllable: name != "notch-clock-unavailable", count: name == "notch-clock-multiple" ? 3 : name == "notch-clock-empty" ? 0 : 1,
                 remaining: name == "notch-clock-multiple" ? 3723 : 197)
@@ -40,17 +45,18 @@ import IslandCore
                 expanded: activity != nil,
                 contentHeight: activity == .approval ? 360 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
-            let occupied = name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
+            let occupied = scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
+                CGRect(x: 960, y: 740, width: 240, height: 60)]
+                : name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
             let placement = MenuBarPlacement.layout(base: geometry, screen: screen, occupied: occupied,
                 expanded: activity != nil, satelliteCount: 2)
-            presentation.compactInsets = placement.insets
             presentation.secondaryFits = placement.secondary != nil; presentation.tertiaryFits = placement.tertiary != nil
             presentation.secondaryOnLeft = (placement.secondary?.midX ?? 0) < 600
             presentation.tertiaryOnLeft = (placement.tertiary?.midX ?? 1200) < 600
             let primary = placement.primary, secondary = placement.secondary ?? geometry.secondary, tertiary = placement.tertiary ?? geometry.tertiary
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
             if activity != nil { presentation.expandedPanelWidth = geometry.primary.width }
-            if name == "notch-merged" { presentation.mergeActivities() }
+            if name == "notch-merged" || name == "notch-score-merged" { presentation.mergeActivities() }
             let canvasHeight = activity == nil ? 100.0 : geometry.primary.height + 60
             let view = ZStack(alignment: .topLeading) {
                 Color(red: 0.12, green: 0.14, blue: 0.19)
