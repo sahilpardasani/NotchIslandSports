@@ -1,9 +1,13 @@
-# Preview 1.6 (build 16) — aligned secondary sports scores
+# Preview 1.6 (build 17) — sports stays in the main island
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 16 secondary sports scores (current)
+## Build 17 sports remains large (current)
+
+Sports never occupies a small pill. With a selected sport, the main island keeps the full-size score; media and native Clock use the companion pills. Opening either control panel returns to the large score when collapsed. Compact sideways swipes browse sports/Calendar without promoting media or Clock; expanded swipes still access all pages. Hold-and-swipe still merges/restores the companion pills. With no sport selected, media/Clock may use the main island. Approvals remain temporary main-island attention updates, without consuming a split slot or moving sports into a pill. No hover or additional background work is introduced. Version 1.6.0, bundle/About build 17.
+
+## Build 16 secondary sports scores (superseded by build 17)
 
 The small sports pill now gives each team its own row, with scores aligned in a shared column. Both rows fit together without cutting digits or mismatching team names and scores. Cricket retains multi-innings scores while omitting overs; other sports retain their score notation, including tennis tiebreaks and F1 positions. VoiceOver reads both full team names and scores. Pill size, gestures, primary layout and polling are unchanged. Bundle/About build 16, version 1.6.0.
 

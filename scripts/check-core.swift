@@ -8,11 +8,6 @@ import Foundation
             precondition(condition, name)
             checks += 1
         }
-        check(CompactActivityText.satelliteScore("187 & 46/4 (34 ov)", cricket: true) == "187 & 46/4", "Cricket innings retained without overs")
-        check(CompactActivityText.satelliteScore("500/9d & 123/4 (45 ov)", cricket: true) == "500/9d & 123/4", "Long cricket scores never sliced")
-        check(CompactActivityText.satelliteScore("7(5) 6 3", cricket: false) == "7(5) 6 3", "Tennis tiebreak preserved")
-        check(CompactActivityText.satelliteScore("P1", cricket: false) == "P1", "F1 position preserved")
-        check(CompactActivityText.satelliteScore("  ", cricket: false) == "—", "Absent score is not zero")
         var selection = ActivitySelection()
         selection.update(available: [.sports, .music])
         check(selection.primary == .sports && selection.secondary == .music, "sports/music split")
@@ -20,7 +15,7 @@ import Foundation
         check(selection.primary == .sports && selection.tertiary == .clock && selection.overflow.isEmpty, "stable three slots")
         selection.update(available: [.sports, .music, .clock], preferred: .clock)
         for _ in 0..<100 { selection.update(available: [.music, .sports, .clock]) }
-        check(selection.primary == .clock && selection.secondary == .sports, "stable explicit selection")
+        check(selection.primary == .sports && selection.secondary == .music, "Explicit media or timer preference cannot demote sports")
         selection.update(available: [.music])
         check(selection.primary == .music && selection.secondary == nil, "merge")
         selection.update(available: [])

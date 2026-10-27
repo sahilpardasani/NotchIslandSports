@@ -18,7 +18,7 @@ import IslandCore
         check(publications == initial, "Unchanged availability must not schedule another layout update")
         check(model.selection.tertiary == .clock && model.showsSecondary && model.showsTertiary, "Three live activities")
         model.handleDrag(horizontal: -40, vertical: 0)
-        check(model.selection.primary == .music && !model.expanded, "Swipe advances compact live content")
+        check(model.selection.primary == .sports && model.collapsedActivity == .calendar && !model.expanded, "Compact swipe browses Calendar without shrinking sports")
         model.handleDrag(horizontal: 40, vertical: 0)
         check(model.selection.primary == .sports, "Opposite swipe returns")
         let slots = model.selection
@@ -40,7 +40,7 @@ import IslandCore
         check(model.merged && !model.showsSecondary, "Provider refresh cannot undo merge")
         check(IslandPresentation(defaults: defaults).merged, "Merge preference survives restart")
         model.handleDrag(horizontal: -40, vertical: 0)
-        check(model.selection.primary == .music && model.merged, "Merged live activities still accessible")
+        check(model.selection.primary == .sports && model.merged, "Merged swipe never demotes sports")
         model.handleDrag(horizontal: 45, vertical: 0, held: true)
         check(model.showsSecondary && model.showsTertiary, "Menu restores all live slots")
         check(!IslandPresentation(defaults: defaults).merged, "Split preference persists")
@@ -89,8 +89,8 @@ import IslandCore
         model.update(sports: true, music: true, clock: false)
         check(model.showsSecondary && model.selection.secondary == .music, "A new playback session splits again after the previous session was merged")
         model.update(sports: true, music: true, clock: true, approval: true)
-        check(model.selection.primary == .sports && model.selection.secondary == .approval, "Urgent request keeps sports primary and exposes approval satellite")
-        check(model.selection.overflow == [.clock], "Fourth activity remains swipe reachable")
+        check(model.selection.primary == .sports && model.selection.secondary == .music && model.collapsedActivity == .approval, "Approval uses main attention page, not a split slot")
+        check(model.selection.tertiary == .clock && model.selection.overflow.isEmpty, "Only media and Clock occupy companion slots")
         model.secondaryFits = false; model.tertiaryFits = false
         check(model.collapsedActivity == .approval && !model.expanded, "Crowded menu exposes urgent request in main notch without opening it")
         check(model.selection.primary == .sports, "Urgent fallback preserves the user's primary selection")
@@ -101,7 +101,7 @@ import IslandCore
         check(model.selectedTab == .music, "Hidden approval does not replace expanded controls under the pointer")
         model.collapse(); model.finishResize()
         model.secondaryFits = true; model.tertiaryFits = true
-        check(model.collapsedActivity == .sports && model.showsSecondary, "Restoring satellite room returns primary score")
+        check(model.collapsedActivity == .approval && model.showsSecondary, "Approval stays visible when satellite room returns")
         model.mergeActivities()
         check(model.collapsedActivity == .approval, "Merging cannot hide a pending approval")
         model.update(sports: true, music: true, clock: true, approval: false)
@@ -112,6 +112,24 @@ import IslandCore
         check(model.expanded && model.selectedTab == .approval, "Score/timer changes never steal approval under review")
         model.update(sports: true, music: true, clock: true, approval: false)
         check(model.selection.secondary == .music && model.selection.tertiary == .clock, "Resolving approvals restores ordinary slots")
+        model.promote(.music)
+        check(model.expanded && model.selectedTab == .music && model.selection.primary == .sports, "Media controls open without demoting sports")
+        model.collapse(); model.finishResize()
+        check(model.collapsedActivity == .sports && model.selection.secondary == .music, "Closing media restores large score")
+        model.promote(.clock); model.collapse(); model.finishResize()
+        check(model.collapsedActivity == .sports && model.selection.tertiary == .clock, "Closing Clock restores large score")
+        model.mergeActivities()
+        model.update(sports: true, music: false, clock: false)
+        model.update(sports: true, music: false, clock: true)
+        check(model.selection.primary == .sports && model.selection.secondary == .clock && model.showsSecondary, "New native timer splits beside sports")
+        model.update(sports: false, music: true, clock: true)
+        model.promote(.music); model.collapse(); model.finishResize()
+        check(model.collapsedActivity == .music, "Without sports, media may occupy main island")
+        model.update(sports: true, music: true, clock: true)
+        check(model.collapsedActivity == .sports && model.selection.secondary != .sports && model.selection.tertiary != .sports, "Sports returning from media-only state reclaims main island")
+        let stable = model.selection
+        for _ in 0..<20 { model.cyclePrimary() }
+        check(model.selection == stable, "Repeated collapsed swipes cannot move sports into a pill")
         withExtendedLifetime(subscription) {}
         print("Passed \(count) presentation checks, including persistent merge, Calendar browsing and no repeated layout publications.")
     }

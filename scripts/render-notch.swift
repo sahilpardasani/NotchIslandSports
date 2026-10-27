@@ -18,7 +18,7 @@ import IslandCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-sports-stays-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
@@ -45,7 +45,7 @@ import IslandCore
             presentation.cameraHeight = 32
             presentation.update(sports: true, music: true, clock: true, calendar: true, approval: approvalCrowded)
             if let activity { presentation.open(activity) }
-            if name == "notch-media-primary" {
+            if name == "notch-sports-stays-primary" {
                 presentation.update(sports: true, music: true, clock: false)
                 presentation.promote(.music); presentation.collapse(); presentation.finishResize()
             }
@@ -97,32 +97,6 @@ import IslandCore
             host.cacheDisplay(in: host.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent(name + ".png"))
         }
-        // Every sport at the actual minimum, typical and maximum satellite widths.
-        let sports = SportType.allCases.compactMap { sport in
-            MockDataProvider.getMockMatches().first { $0.sportType == sport }
-        } + [.cricket(CricketMatch(id: "multi-innings", status: .live,
-            homeTeam: "Sikkim", awayTeam: "Nagaland", homeTeamAbbrev: "SIKM", awayTeamAbbrev: "NAGA",
-            homeScore: "184", awayScore: "187 & 46/4 (34 ov)", statusText: ""))]
-        let sheet = VStack(alignment: .leading, spacing: 8) {
-            Text("Sports pills · 64 / 78 / 96 pt · synthetic fixtures").foregroundColor(.white)
-            ForEach(Array(sports.enumerated()), id: \.offset) { _, match in
-                HStack(spacing: 20) {
-                    Text(match.sportType.rawValue).font(.system(size: 11)).foregroundColor(.white).frame(width: 120, alignment: .leading)
-                    ForEach([64.0, 78.0, 96.0], id: \.self) { width in
-                        SportsSatelliteView(match: match).padding(.horizontal, 8)
-                            .frame(width: width, height: 32).background(Capsule().fill(.black)).clipShape(Capsule())
-                    }
-                }
-            }
-        }.padding(20).frame(width: 480).background(Color(red: 0.12, green: 0.14, blue: 0.19))
-        let sheetHost = NSHostingView(rootView: sheet)
-        sheetHost.frame = NSRect(x: 0, y: 0, width: 480, height: sports.count * 40 + 66)
-        let sheetWindow = NSWindow(contentRect: sheetHost.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        sheetWindow.contentView = sheetHost
-        sheetHost.layoutSubtreeIfNeeded()
-        let sheetBitmap = sheetHost.bitmapImageRepForCachingDisplay(in: sheetHost.bounds)!
-        sheetHost.cacheDisplay(in: sheetHost.bounds, to: sheetBitmap)
-        try sheetBitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("sports-pill-matrix.png"))
         let setup = NSHostingView(rootView: IslandSetupView(clock: NativeClockManager(defaults: defaults),
             calendar: CalendarManager(defaults: defaults), media: media, approvals: ApprovalManager(), presentation: IslandPresentation(defaults: defaults), done: {}).background(Color(nsColor: .windowBackgroundColor)))
         setup.frame = NSRect(x: 0, y: 0, width: 490, height: 600)

@@ -13,18 +13,32 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(selection.tertiary, .clock)
         XCTAssertTrue(selection.overflow.isEmpty)
         selection.update(available: [.sports, .music, .clock], preferred: .clock)
-        XCTAssertEqual(selection.primary, .clock)
-        XCTAssertEqual(selection.secondary, .sports)
-        XCTAssertEqual(selection.tertiary, .music)
+        XCTAssertEqual(selection.primary, .sports)
+        XCTAssertEqual(selection.secondary, .music)
+        XCTAssertEqual(selection.tertiary, .clock)
         XCTAssertTrue(selection.overflow.isEmpty)
         for _ in 0..<100 { selection.update(available: [.clock, .music, .sports]) }
-        XCTAssertEqual(selection.primary, .clock)
+        XCTAssertEqual(selection.primary, .sports)
         selection.update(available: [.music])
         XCTAssertEqual(selection.primary, .music)
         XCTAssertNil(selection.secondary)
         XCTAssertTrue(selection.overflow.isEmpty)
         selection.update(available: [])
         XCTAssertNil(selection.primary)
+    }
+    func testSportsReturnsToMainAndOnlyMediaOrClockSplit() {
+        for preferred in IslandActivity.allCases {
+            var slots = ActivitySelection()
+            slots.update(available: [.music, .clock], preferred: .music)
+            slots.update(available: Set(IslandActivity.allCases), preferred: preferred)
+            XCTAssertEqual(slots.primary, .sports)
+            XCTAssertEqual(Set([slots.secondary, slots.tertiary].compactMap { $0 }), [.music, .clock])
+            XCTAssertTrue(slots.overflow.isEmpty)
+            slots.update(available: [.sports, .approval, .calendar])
+            XCTAssertEqual(slots.primary, .sports)
+            XCTAssertNil(slots.secondary)
+            XCTAssertNil(slots.tertiary)
+        }
     }
     func testUnsupportedPreferenceDoesNotCreateSyntheticActivity() {
         var selection = ActivitySelection()

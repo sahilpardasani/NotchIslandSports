@@ -8,15 +8,9 @@ final class IslandPresentation: ObservableObject {
     @Published private(set) var merged: Bool
     @Published private(set) var compactCalendar = false
     var collapsedActivity: IslandActivity {
-        // An urgent request must not disappear just because the menu bar cannot fit
-        // its satellite, or the user merged the ordinary activities. Keep selection
-        // intact so the prior score/media/calendar returns when the request clears.
-        let hasApproval = [selection.primary, selection.secondary, selection.tertiary].contains(.approval)
-            || selection.overflow.contains(.approval)
-        let approvalVisible = (!compactCalendar && selection.primary == .approval)
-            || (showsSecondary && selection.secondary == .approval)
-            || (showsTertiary && selection.tertiary == .approval)
-        if hasApproval && !approvalVisible { return .approval }
+        // Pending approvals remain visible without creating a split pill or
+        // demoting sports. The selected sports page returns when they clear.
+        if available.contains(.approval) { return .approval }
         return compactCalendar ? .calendar : (selection.primary ?? .sports)
     }
     @Published var secondaryOnLeft = true
@@ -39,7 +33,7 @@ final class IslandPresentation: ObservableObject {
     @Published var suspended = false
     @Published var lowPower = false
     @Published var reduceMotion = false
-    private var available = Set<IslandActivity>()
+    @Published private var available = Set<IslandActivity>()
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -50,19 +44,20 @@ final class IslandPresentation: ObservableObject {
     var showsTertiary: Bool { !merged && tertiaryFits && selection.tertiary != nil }
 
     func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false, approval: Bool = false) {
-        let approvalStarted = !available.contains(.approval) && approval
+        let clockStarted = !available.contains(.clock) && clock
         let musicEnded = available.contains(.music) && !music
         let musicStarted = !available.contains(.music) && music
-        available = []
-        if sports { available.insert(.sports) }
-        if music { available.insert(.music) }
-        if clock { available.insert(.clock) }
-        if approval { available.insert(.approval) }
+        var nextAvailable = Set<IslandActivity>()
+        if sports { nextAvailable.insert(.sports) }
+        if music { nextAvailable.insert(.music) }
+        if clock { nextAvailable.insert(.clock) }
+        if approval { nextAvailable.insert(.approval) }
+        if available != nextAvailable { available = nextAvailable }
         // Calendar availability never changes the live slots or their ordering.
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }
-        if musicStarted || approvalStarted { setMerged(false) }
+        if musicStarted || clockStarted { setMerged(false) }
         if musicEnded, expanded, selectedTab == .music { collapse() }
         if !expanded, selectedTab != collapsedActivity { selectedTab = collapsedActivity }
     }
@@ -81,7 +76,12 @@ final class IslandPresentation: ObservableObject {
     }
     /// Calendar stays reachable even when empty or disconnected, without displacing live slots.
     func cyclePrimary(forward: Bool = true) {
-        let pages = IslandActivity.allCases.filter { available.contains($0) || $0 == .calendar }
+        let pages = IslandActivity.allCases.filter { activity in
+            if !expanded && available.contains(.sports) {
+                return activity == .sports || activity == .calendar || (activity == .approval && available.contains(.approval))
+            }
+            return available.contains(activity) || activity == .calendar
+        }
         let current: IslandActivity? = expanded ? selectedTab : collapsedActivity
         let index = current.flatMap { pages.firstIndex(of: $0) }
         let nextIndex = index.map { ($0 + (forward ? 1 : pages.count - 1)) % pages.count } ?? (forward ? 0 : pages.count - 1)

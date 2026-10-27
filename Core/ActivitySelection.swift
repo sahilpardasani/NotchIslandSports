@@ -3,11 +3,11 @@ import Foundation
 public enum IslandActivity: String, CaseIterable, Codable, Sendable {
     case sports, music, clock, calendar, approval
 
-    /// Calendar is a browse page, never a live split activity.
-    public var occupiesLiveSlot: Bool { self != .calendar }
+    /// Calendar is a browse page; approvals use a temporary attention page.
+    public var occupiesLiveSlot: Bool { self == .sports || self == .music || self == .clock }
 }
 
-/// Pure selection: content updates never reorder slots; explicit selection can.
+/// Sports owns the primary whenever available. Only media and Clock can be satellites.
 public struct ActivitySelection: Equatable, Sendable {
     public private(set) var primary: IslandActivity?
     public private(set) var secondary: IslandActivity?
@@ -19,14 +19,14 @@ public struct ActivitySelection: Equatable, Sendable {
         let available = available.filter(\.occupiesLiveSlot)
         let existing = [primary, secondary, tertiary].compactMap { $0 } + overflow
         var ordered: [IslandActivity] = []
-        if let preferred, available.contains(preferred) { ordered.append(preferred) }
+        if available.contains(.sports) { ordered.append(.sports) }
+        // An explicit page choice may open media/Clock controls, but must never
+        // shrink sports into a satellite or reorder its companion pills.
+        if !available.contains(.sports), let preferred, available.contains(preferred) {
+            ordered.append(preferred)
+        }
         for activity in existing + IslandActivity.allCases where available.contains(activity) {
             if !ordered.contains(activity) { ordered.append(activity) }
-        }
-        // Pending attention uses a satellite without stealing the primary under review.
-        if available.contains(.approval), ordered.first != .approval {
-            ordered.removeAll { $0 == .approval }
-            ordered.insert(.approval, at: min(1, ordered.count))
         }
         primary = ordered.first
         secondary = ordered.dropFirst().first

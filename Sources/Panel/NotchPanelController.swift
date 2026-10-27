@@ -327,13 +327,10 @@ struct SecondaryActivityView: View {
                             tint: media.currentTrack?.dominantColor ?? .purple)
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
-                case .approval: ApprovalCompactView(manager: approvals, minimal: true)
+                case .approval: EmptyView() // Approvals use the main attention page.
                 case .calendar: EmptyView() // Calendar never occupies a live slot.
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
-                case .sports:
-                    if let match = dataManager.activeMatch {
-                        SportsSatelliteView(match: match)
-                    }
+                case .sports: EmptyView() // Sports always stays in the main island.
                 case nil: EmptyView()
                 }
             }.frame(width: max(0, proxy.size.width - 16), height: proxy.size.height)
@@ -345,6 +342,6 @@ struct SecondaryActivityView: View {
         .background(Capsule().fill(Color.black))
         .clipShape(Capsule())
         .accessibilityLabel("Open \(activity?.rawValue ?? "activity") activity")
-        .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : activity == .sports ? (dataManager.activeMatch.map { SportsSatelliteView.accessibilitySummary($0) } ?? "") : "")
+        .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : "")
     }
 }
