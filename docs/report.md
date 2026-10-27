@@ -1,3 +1,5 @@
+> Latest follow-up: [notch restoration and three activities](NOTCH-RESTORATION.md) supersedes the earlier below-camera/two-slot placement and observation-only Clock behavior. Clock controls are now experimental and user-triggered; Calendar remains strictly read-only.
+
 # NotchIslandSports implementation report
 
 **For:** Astra/Fabel or another AI coding agent  

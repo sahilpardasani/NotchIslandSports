@@ -6,6 +6,7 @@ import IslandCore
 final class IslandPresentation: ObservableObject {
     @Published private(set) var selection = ActivitySelection()
     @Published var selectedTab: IslandActivity = .sports
+    @Published var cameraHeight: CGFloat = 0
     @Published var expanded = false
     @Published var pinned = false
     @Published var suspended = false
@@ -36,12 +37,18 @@ final class IslandPresentation: ObservableObject {
         open(activity)
     }
     func cyclePrimary() {
-        let slots = [selection.primary, selection.secondary].compactMap { $0 } + selection.overflow
+        let slots = [selection.primary, selection.secondary, selection.tertiary].compactMap { $0 } + selection.overflow
         guard slots.count > 1 else { return }
         var next = selection
         next.update(available: available, preferred: slots[1])
         if next != selection { selection = next }
         if let primary = next.primary, selectedTab != primary { selectedTab = primary }
+    }
+    func pullDown() { open(selection.primary ?? .sports) }
+    func handleDrag(horizontal: CGFloat, vertical: CGFloat) {
+        if abs(vertical) > abs(horizontal), abs(vertical) > 18 {
+            if vertical > 0 { pullDown() } else { collapse() }
+        } else if abs(horizontal) > 20 { cyclePrimary() }
     }
     func collapse() { pinned = false; expanded = false; selectedTab = selection.primary ?? .sports }
 }

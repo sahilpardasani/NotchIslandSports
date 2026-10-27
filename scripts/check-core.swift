@@ -12,7 +12,7 @@ import Foundation
         selection.update(available: [.sports, .music])
         check(selection.primary == .sports && selection.secondary == .music, "sports/music split")
         selection.update(available: [.music, .clock, .sports])
-        check(selection.primary == .sports && selection.overflow == [.clock], "stable overflow")
+        check(selection.primary == .sports && selection.tertiary == .clock && selection.overflow.isEmpty, "stable three slots")
         selection.update(available: [.sports, .music, .clock], preferred: .clock)
         for _ in 0..<100 { selection.update(available: [.music, .sports, .clock]) }
         check(selection.primary == .clock && selection.secondary == .sports, "stable explicit selection")

@@ -98,6 +98,10 @@ struct NotchContentView: View {
         Group {
             if presentation.expanded {
                 VStack(spacing: 6) {
+                    Color.clear.frame(height: presentation.cameraHeight)
+                    Capsule().fill(Color.white.opacity(0.35)).frame(width: 34, height: 4)
+                        .frame(maxWidth: .infinity).frame(height: 12).contentShape(Rectangle())
+                        .accessibilityLabel("Drag up to collapse island")
                     HStack(spacing: 6) {
                         tab("Sports", icon: "sportscourt", activity: .sports)
                         tab("Music", icon: "music.note", activity: .music)
@@ -139,9 +143,9 @@ struct NotchContentView: View {
                     Group {
                         switch presentation.selection.primary ?? .sports {
                         case .sports: CollapsedScoreView(dataManager: dataManager)
-                        case .music: NowPlayingCollapsedView(manager: nowPlayingManager)
-                        case .calendar: CalendarCompactView(manager: calendarManager)
-                        case .clock: NativeClockCompactView(manager: clockManager, minimal: false)
+                        case .music: cameraSafeCompact(.music)
+                        case .calendar: cameraSafeCompact(.calendar)
+                        case .clock: cameraSafeCompact(.clock)
                         }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -154,13 +158,38 @@ struct NotchContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18))
         .foregroundColor(.white)
         .preferredColorScheme(.dark)
+        .ignoresSafeArea()
         .transaction { if reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-            if abs(value.translation.width) > abs(value.translation.height) {
-                presentation.cyclePrimary()
+            // Expanded content keeps vertical drag/scroll interaction; its handle owns collapse.
+            if !presentation.expanded || value.startLocation.y < presentation.cameraHeight + 36 || abs(value.translation.width) > abs(value.translation.height) {
+                presentation.handleDrag(horizontal: value.translation.width, vertical: value.translation.height)
             }
         })
         .onExitCommand { presentation.collapse() }
+    }
+
+    private func cameraSafeCompact(_ activity: IslandActivity) -> some View {
+        NotchEars(gap: dataManager.hasNotch ? dataManager.notchWidth + 12 : 20) {
+            HStack(spacing: 6) {
+                Image(systemName: activity == .music ? "music.note" : activity == .clock ? "timer" : "calendar")
+                    .foregroundColor(activity == .clock ? .orange : .cyan)
+                Text(activity == .music ? (nowPlayingManager.currentTrack?.title ?? "Music") :
+                     activity == .clock ? "Apple Clock" : (calendarManager.currentEvent?.title ?? "Calendar"))
+                    .font(.system(size: 11, weight: .semibold))
+            }
+        } right: {
+            Group {
+                if activity == .clock { NativeClockCompactView(manager: clockManager, minimal: true) }
+                else if activity == .calendar, let event = calendarManager.currentEvent {
+                    Text(event.allDay ? "All day" : event.start.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(.cyan)
+                } else {
+                    Text(nowPlayingManager.currentTrack?.artist ?? "")
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+            }
+        }
     }
 
     private func tab(_ title: String, icon: String, activity: IslandActivity) -> some View {

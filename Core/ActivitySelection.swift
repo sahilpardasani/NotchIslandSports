@@ -8,11 +8,12 @@ public enum IslandActivity: String, CaseIterable, Codable, Sendable {
 public struct ActivitySelection: Equatable, Sendable {
     public private(set) var primary: IslandActivity?
     public private(set) var secondary: IslandActivity?
+    public private(set) var tertiary: IslandActivity?
     public private(set) var overflow: [IslandActivity] = []
     public init() {}
 
     public mutating func update(available: Set<IslandActivity>, preferred: IslandActivity? = nil) {
-        let existing = [primary, secondary].compactMap { $0 } + overflow
+        let existing = [primary, secondary, tertiary].compactMap { $0 } + overflow
         var ordered: [IslandActivity] = []
         if let preferred, available.contains(preferred) { ordered.append(preferred) }
         for activity in existing + IslandActivity.allCases where available.contains(activity) {
@@ -20,7 +21,8 @@ public struct ActivitySelection: Equatable, Sendable {
         }
         primary = ordered.first
         secondary = ordered.dropFirst().first
-        overflow = Array(ordered.dropFirst(2))
+        tertiary = ordered.dropFirst(2).first
+        overflow = Array(ordered.dropFirst(3))
     }
 }
 

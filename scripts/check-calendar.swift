@@ -40,7 +40,7 @@ import IslandCore
         check(CalendarAgenda.currentOrNext([tomorrowEvent], at: date(86400))?.id == "tomorrow", "New day makes that day's event eligible")
         var slots = ActivitySelection()
         slots.update(available: [.sports,.music,.clock,.calendar], preferred:.calendar)
-        check(slots.primary == .calendar && slots.overflow.count == 2, "Calendar coexists with other activities")
+        check(slots.primary == .calendar && slots.overflow.count == 1, "Calendar coexists with other activities")
         print("Passed \(count) calendar checks.")
     }
 }

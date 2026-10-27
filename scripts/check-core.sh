@@ -11,3 +11,5 @@ xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules Sources/Panel/
 build/presentation-checks
 xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-calendar.swift build/check-modules/IslandCore.o -o build/calendar-checks
 build/calendar-checks
+xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-notch.swift build/check-modules/IslandCore.o -o build/notch-checks
+build/notch-checks

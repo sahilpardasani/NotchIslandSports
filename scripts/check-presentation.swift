@@ -21,7 +21,13 @@ import IslandCore
         let empty = publications
         for _ in 0..<100 { model.update(sports: false, music: false, clock: false) }
         precondition(publications == empty, "Empty state must not loop")
+        model.update(sports: true, music: false, clock: true, calendar: true)
+        precondition(model.selection.tertiary == .calendar, "Three activities visible")
+        model.handleDrag(horizontal: 0, vertical: 40)
+        precondition(model.expanded && model.pinned, "Pull-down pins expansion")
+        model.handleDrag(horizontal: 0, vertical: -40)
+        precondition(!model.expanded && !model.pinned, "Push-up collapses")
         withExtendedLifetime(subscription) {}
-        print("Passed 5 presentation checks, including no repeated layout publications.")
+        print("Passed 8 presentation checks, including no repeated layout publications.")
     }
 }

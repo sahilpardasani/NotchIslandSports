@@ -167,3 +167,21 @@ private final class CalendarReader {
         }
     }
 }
+
+#if DEBUG
+extension CalendarManager {
+    static func visualFixture() -> CalendarManager {
+        let defaults = UserDefaults(suiteName: "NotchIsland.CalendarVisualFixture")!
+        defaults.register(defaults: ["NativeCalendarEnabled": true])
+        let model = CalendarManager(defaults: defaults)
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 15))!
+        let event = AgendaEvent(id: "fixture", title: "Design review", start: date.addingTimeInterval(3600),
+            end: date.addingTimeInterval(7200), calendarName: "Personal")
+        model.hasAccess = true
+        model.now = date
+        model.events = [event]
+        model.currentEvent = event
+        return model
+    }
+}
+#endif

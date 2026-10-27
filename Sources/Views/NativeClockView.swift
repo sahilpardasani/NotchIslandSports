@@ -1,11 +1,13 @@
 import SwiftUI
+import IslandCore
 
 struct NativeClockView: View {
     @ObservedObject var manager: NativeClockManager
+    @State private var cancelling: ObservedClockTimer?
     var body: some View {
         VStack(spacing: 12) {
             Label("Apple Clock", systemImage: "timer").font(.headline)
-            Text("Experimental · read-only native timers").font(.caption).foregroundColor(.secondary)
+            Text("Experimental · native Clock timers").font(.caption).foregroundColor(.secondary)
             Text(manager.status).font(.caption).multilineTextAlignment(.center)
             if !manager.timers.isEmpty {
                 ScrollView {
@@ -14,11 +16,16 @@ struct NativeClockView: View {
                             Text("Clock timer \(index + 1)")
                             Spacer()
                             Text(clockDuration(timer.remaining)).monospacedDigit()
-                            Text(timer.paused ? "Paused" : "Running").foregroundColor(.secondary)
+                            if timer.canControl {
+                                Button(timer.paused ? "Resume" : "Pause") { manager.control(timer.paused ? .resume : .pause, timer: timer) }
+                                    .disabled(manager.controlBusy)
+                                Button("Cancel") { cancelling = timer }.disabled(manager.controlBusy)
+                            } else { Text(timer.paused ? "Paused" : "Running").foregroundColor(.secondary) }
                         }.padding(.horizontal, 12).padding(.vertical, 4)
                     }
                 }
             }
+            if let message = manager.controlMessage { Text(message).font(.caption).foregroundColor(.orange) }
             if let observedAt = manager.observedAt {
                 Text("Last observed: \(observedAt, style: .time)").font(.caption2).foregroundColor(.secondary)
             }
@@ -31,9 +38,14 @@ struct NativeClockView: View {
                     Button("Disable") { manager.enabled = false }
                 }
             }
-            Text("Timers stay in Apple Clock. If its window cannot be read, the island stops showing a countdown. Manage timers in Clock.")
+            Text("Timers stay in Apple Clock. Pause, resume and cancel appear only when native controls can be identified. Otherwise use Open Clock.")
                 .font(.caption2).foregroundColor(.secondary).multilineTextAlignment(.center)
         }.padding(14)
+        .alert(item: $cancelling) { timer in
+            Alert(title: Text("Cancel this timer in Apple Clock?"),
+                  primaryButton: .destructive(Text("Cancel Timer")) { manager.control(.cancel, timer: timer) },
+                  secondaryButton: .cancel(Text("Keep Timer")))
+        }
     }
 }
 

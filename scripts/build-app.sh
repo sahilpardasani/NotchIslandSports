@@ -21,8 +21,8 @@ cp "$bin_dir/NotchIslandSports" "$app/Contents/MacOS/NotchIslandSports"
   -e 's/$(PRODUCT_NAME)/NotchIslandSports/g' \
   -e 's/$(MACOSX_DEPLOYMENT_TARGET)/12.0/g' \
   Sources/App/Info.plist > "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.2.0' "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 3' "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.3.0' "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 4' "$app/Contents/Info.plist"
 # The current asset catalog contains no icon images. Preserve any supplied resources.
 if [[ -d Resources ]]; then cp -R Resources/. "$app/Contents/Resources/"; fi
 /usr/bin/plutil -lint "$app/Contents/Info.plist"

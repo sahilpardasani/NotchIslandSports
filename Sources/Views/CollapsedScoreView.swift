@@ -5,42 +5,15 @@ struct CollapsedScoreView: View {
     @State private var isPulsing = false
     
     var body: some View {
-        HStack(alignment: .center) {
-            if let currentMatch = dataManager.activeMatch {
-                // Left side
-                leftSideView(for: currentMatch)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Middle spacer representing the notch (or standard gap)
-                Spacer()
-                    .frame(width: dataManager.hasNotch ? dataManager.notchWidth + 16 : 60)
-                
-                // Right side
-                rightSideView(for: currentMatch)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                // No active matches split fallback
-                HStack(spacing: 4) {
-                    Text("📺")
-                    Text("No Active Matches")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
-                    .frame(width: dataManager.hasNotch ? dataManager.notchWidth + 16 : 60)
-                
-                Text("NotchIsland")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.3))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+        NotchEars(gap: dataManager.hasNotch ? dataManager.notchWidth + 12 : 20) {
+            if let match = dataManager.activeMatch { leftSideView(for: match) }
+            else { Text("No active match").font(.system(size: 11)).foregroundColor(.gray) }
+        } right: {
+            if let match = dataManager.activeMatch { rightSideView(for: match) }
+            else { Text("NotchIsland").font(.system(size: 11)).foregroundColor(.gray) }
         }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     // MARK: - Side View Routers
     
     @ViewBuilder

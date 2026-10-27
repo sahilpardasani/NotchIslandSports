@@ -13,6 +13,7 @@ private final class IslandPanel: NSPanel {
 final class NotchPanelController {
     private var panel: IslandPanel!
     private var secondaryPanel: IslandPanel!
+    private var tertiaryPanel: IslandPanel!
     private let hoverState = HoverState()
     private let dataManager: SportsDataManager
     private let media: NowPlayingManager
@@ -37,14 +38,18 @@ final class NotchPanelController {
     func setupPanel() {
         panel = makePanel()
         secondaryPanel = makePanel()
+        tertiaryPanel = makePanel()
         let primary = HoverTrackingHostingView(rootView: NotchContentView(hoverState: hoverState,
             dataManager: dataManager, nowPlayingManager: media, clockManager: clock, calendarManager: calendar, presentation: presentation))
         primary.hoverState = hoverState
+        primary.onScrollPull = { [weak self] in self?.presentation.pullDown() }
         panel.contentView = primary
         let secondary = HoverTrackingHostingView(rootView: SecondaryActivityView(
-            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation))
-        secondary.hoverState = hoverState
+            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: false))
         secondaryPanel.contentView = secondary
+        let tertiary = HoverTrackingHostingView(rootView: SecondaryActivityView(
+            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: true))
+        tertiaryPanel.contentView = tertiary
         observe()
         repositionForScreen()
         refreshActivities()
@@ -53,7 +58,7 @@ final class NotchPanelController {
     private func makePanel() -> IslandPanel {
         let result = IslandPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                  backing: .buffered, defer: false)
-        result.level = .floating
+        result.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
         result.backgroundColor = .clear
         result.isOpaque = false
         result.hasShadow = false
@@ -104,15 +109,18 @@ final class NotchPanelController {
     }
 
     func repositionForScreen() {
-        screen = NSScreen.screens.first(where: { displayID($0) == selectedDisplayID })
-            ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
+        screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 && CGDisplayIsBuiltin(displayID($0) ?? 0) != 0 })
+            ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 && displayID($0) == selectedDisplayID })
+            ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 })
+            ?? NSScreen.screens.first(where: { displayID($0) == selectedDisplayID }) ?? NSScreen.main
         guard let screen else { return }
         selectedDisplayID = displayID(screen)
-        let cutout = screen.auxiliaryTopRightArea.flatMap { right in
-            screen.auxiliaryTopLeftArea.map { right.minX - $0.maxX }
-        } ?? 0
-        dataManager.hasNotch = screen.safeAreaInsets.top > 0 || dataManager.forceNotchLayout
-        dataManager.notchWidth = max(cutout, dataManager.forceNotchLayout ? 150 : 0)
+        let geometry = NotchGeometry.layout(screen: screen.frame, safeTop: screen.safeAreaInsets.top,
+            leftArea: screen.auxiliaryTopLeftArea, rightArea: screen.auxiliaryTopRightArea,
+            simulated: dataManager.forceNotchLayout, expanded: false, contentHeight: 0)
+        dataManager.hasNotch = geometry.cameraHeight > 0
+        dataManager.notchWidth = geometry.cameraWidth
+        if presentation.cameraHeight != geometry.cameraHeight { presentation.cameraHeight = geometry.cameraHeight }
         updateFrames(animated: false)
     }
 
@@ -138,48 +146,19 @@ final class NotchPanelController {
     }
 
     private func updateFrames(animated: Bool = true) {
-        guard let panel, let secondaryPanel, let screen else { return }
+        guard let panel, let secondaryPanel, let tertiaryPanel, let screen else { return }
         guard !presentation.suspended else { hide(); return }
-        let hasSecondary = presentation.selection.secondary != nil
-        let width: CGFloat
-        if presentation.expanded { width = dataManager.hasNotch ? 660 : 560 }
-        else {
-            switch presentation.selection.primary ?? .sports {
-            case .sports: width = dataManager.hasNotch ? max(600, dataManager.notchWidth + 500) : 540
-            case .music: width = 420
-            case .clock: width = 240
-            case .calendar: width = 420
-            }
-        }
-        let bubbleWidth: CGFloat = 76
-        let gap: CGFloat = 8
-        let available = max(200, screen.frame.width - 32 - (hasSecondary ? bubbleWidth + gap : 0))
-        let actualWidth = min(width, available)
-        let height = presentation.expanded ? min(expandedHeight, screen.visibleFrame.height - 16) : 36
-        // Place every interactive pixel below the hardware cutout/menu bar.
-        // A distinct secondary window leaves the split gap click-through.
-        let top = min(screen.frame.maxY - screen.safeAreaInsets.top, screen.visibleFrame.maxY) - 4
-        let x = min(max(screen.frame.midX - actualWidth / 2, screen.frame.minX + 16),
-                    screen.frame.maxX - actualWidth - (hasSecondary ? bubbleWidth + gap : 0) - 16)
-        let frame = NSRect(x: x, y: top - height, width: actualWidth, height: height)
-        let secondaryFrame = NSRect(x: x + actualWidth + gap, y: top - 36, width: bubbleWidth, height: 36)
+        let layout = NotchGeometry.layout(screen: screen.frame, safeTop: screen.safeAreaInsets.top,
+            leftArea: screen.auxiliaryTopLeftArea, rightArea: screen.auxiliaryTopRightArea,
+            simulated: dataManager.forceNotchLayout, expanded: presentation.expanded, contentHeight: expandedHeight)
         let animate = animated && !presentation.reduceMotion && !presentation.lowPower
-        setFrame(panel, frame, animated: animate)
-        setFrame(secondaryPanel, secondaryFrame, animated: animate)
+        setFrame(panel, layout.primary, animated: animate)
+        setFrame(secondaryPanel, layout.secondary, animated: animate)
+        setFrame(tertiaryPanel, layout.tertiary, animated: animate)
         panel.acceptsKeyboard = presentation.expanded
         if !panel.isVisible { panel.orderFrontRegardless() }
-        if hasSecondary {
-            if !secondaryPanel.isVisible {
-                secondaryPanel.alphaValue = animate ? 0 : 1
-                secondaryPanel.orderFrontRegardless()
-                if animate {
-                    NSAnimationContext.runAnimationGroup { context in
-                        context.duration = 0.24
-                        secondaryPanel.animator().alphaValue = 1
-                    }
-                }
-            }
-        } else if secondaryPanel.isVisible { secondaryPanel.orderOut(nil) }
+        showSatellite(secondaryPanel, visible: presentation.selection.secondary != nil, animated: animate)
+        showSatellite(tertiaryPanel, visible: presentation.selection.tertiary != nil, animated: animate)
         let policy = "\(presentation.expanded && presentation.selectedTab == .sports):\(presentation.lowPower)"
         if policy != lastDetailPresentation {
             lastDetailPresentation = policy
@@ -192,6 +171,17 @@ final class NotchPanelController {
             panel.resignKey()
         }
         lastExpanded = presentation.expanded
+    }
+
+    private func showSatellite(_ window: NSWindow, visible: Bool, animated: Bool) {
+        guard visible else { if window.isVisible { window.orderOut(nil) }; return }
+        guard !window.isVisible else { return }
+        window.alphaValue = animated ? 0 : 1
+        window.orderFrontRegardless()
+        if animated { NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.24
+            window.animator().alphaValue = 1
+        } }
     }
 
     private func setFrame(_ window: NSWindow, _ frame: NSRect, animated: Bool) {
@@ -213,22 +203,24 @@ final class NotchPanelController {
         panel.makeKeyAndOrderFront(nil)
     }
     func show() { presentation.suspended = false; updateFrames(animated: false) }
-    func hide() { panel?.orderOut(nil); secondaryPanel?.orderOut(nil) }
+    func hide() { panel?.orderOut(nil); secondaryPanel?.orderOut(nil); tertiaryPanel?.orderOut(nil) }
     func toggle() { if panel.isVisible { presentation.suspended = true; hide() } else { show() } }
 }
 
-private struct SecondaryActivityView: View {
+struct SecondaryActivityView: View {
     @ObservedObject var dataManager: SportsDataManager
     @ObservedObject var media: NowPlayingManager
     @ObservedObject var clock: NativeClockManager
     @ObservedObject var calendar: CalendarManager
     @ObservedObject var presentation: IslandPresentation
+    var third: Bool
+    private var activity: IslandActivity? { third ? presentation.selection.tertiary : presentation.selection.secondary }
     var body: some View {
         Button {
-            if let activity = presentation.selection.secondary { presentation.promote(activity) }
+            if let activity { presentation.open(activity) }
         } label: {
             Group {
-                switch presentation.selection.secondary {
+                switch activity {
                 case .music:
                     HStack(spacing: 5) {
                         Image(systemName: media.currentTrack?.isPlaying == true ? "music.note" : "pause.fill")
@@ -237,14 +229,22 @@ private struct SecondaryActivityView: View {
                 case .calendar: CalendarCompactView(manager: calendar, minimal: true)
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
                 case .sports:
-                    Text(dataManager.activeMatch?.sportType.icon ?? "🏟️")
+                    VStack(spacing: 1) {
+                        Text("\(dataManager.activeMatch?.homeTeamAbbrev ?? "") · \(dataManager.activeMatch?.awayTeamAbbrev ?? "")")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("\(dataManager.activeMatch?.homeScore ?? "") – \(dataManager.activeMatch?.awayScore ?? "")")
+                            .font(.system(size: 9, weight: .medium))
+                    }.foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.7)
                 case nil: EmptyView()
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(DragGesture(minimumDistance: 18).onEnded { value in
+            if value.translation.height > 18, let activity { presentation.open(activity) }
+        })
         .background(Capsule().fill(Color.black))
-        .accessibilityLabel("Open \(presentation.selection.secondary?.rawValue ?? "activity") activity")
-        .accessibilityValue(presentation.selection.secondary == .music ? (media.currentTrack?.title ?? "") : "")
+        .accessibilityLabel("Open \(activity?.rawValue ?? "activity") activity")
+        .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : "")
     }
 }

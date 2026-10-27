@@ -1,3 +1,5 @@
+> 1.3 preview restores the physical-notch top anchor and pull-down interaction, shows three activities at once, and adds experimental native Clock controls. See [details and validation](docs/NOTCH-RESTORATION.md).
+
 > Calendar update: today’s collapsed event advances automatically at its end time. Apple Calendar events stay untouched. See [calendar behavior and setup](docs/CALENDAR.md).
 
 # 🏟️ NotchIslandSports

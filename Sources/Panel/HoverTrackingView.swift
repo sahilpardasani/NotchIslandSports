@@ -46,6 +46,19 @@ final class HoverTrackingHostingView<Content: View>: NSHostingView<Content> {
     
     /// The shared hover state object that SwiftUI views observe.
     var hoverState: HoverState?
+    var onScrollPull: (() -> Void)?
+    private var scrollPull: CGFloat = 0
+
+    override func scrollWheel(with event: NSEvent) {
+        // Only the compact strip owns pull-down scrolling; expanded lists retain normal scrolling.
+        if bounds.height <= 60, event.momentumPhase.isEmpty {
+            if event.phase == .began { scrollPull = 0 }
+            scrollPull += event.scrollingDeltaY
+            if scrollPull < -12 { scrollPull = 0; onScrollPull?(); return }
+            if event.phase == .ended || event.phase == .cancelled { scrollPull = 0 }
+        }
+        super.scrollWheel(with: event)
+    }
     
     /// The active tracking area; recreated whenever the view's bounds change.
     private var hoverTrackingArea: NSTrackingArea?
@@ -103,3 +116,4 @@ final class HoverTrackingHostingView<Content: View>: NSHostingView<Content> {
         return super.hitTest(point)
     }
 }
+

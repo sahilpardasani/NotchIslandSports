@@ -1,3 +1,5 @@
+> Latest follow-up: [notch restoration and three activities](NOTCH-RESTORATION.md) supersedes the earlier below-camera/two-slot placement and observation-only Clock behavior. Clock controls are now experimental and user-triggered; Calendar remains strictly read-only.
+
 # Battery fixes and split activities — 1.1 preview
 
 This preview preserves the existing 13 sports, feed parsers, scorecards, match picker, Hindi display, menu-bar entry and notch simulation. It changes the activity shell and scheduling. It does **not** implement the entire earlier report.
