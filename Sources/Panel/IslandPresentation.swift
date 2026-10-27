@@ -13,11 +13,12 @@ final class IslandPresentation: ObservableObject {
     @Published var reduceMotion = false
     private var available = Set<IslandActivity>()
 
-    func update(sports: Bool, music: Bool, clock: Bool) {
+    func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false) {
         available = []
         if sports { available.insert(.sports) }
         if music { available.insert(.music) }
         if clock { available.insert(.clock) }
+        if calendar { available.insert(.calendar) }
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }

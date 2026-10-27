@@ -16,6 +16,7 @@ final class NotchPanelController {
     private let hoverState = HoverState()
     private let dataManager: SportsDataManager
     private let media: NowPlayingManager
+    private let calendar: CalendarManager
     private let clock: NativeClockManager
     let presentation: IslandPresentation
     private var cancellables = Set<AnyCancellable>()
@@ -28,20 +29,20 @@ final class NotchPanelController {
     private var selectedDisplayID: CGDirectDisplayID?
 
     init(dataManager: SportsDataManager, media: NowPlayingManager,
-         clock: NativeClockManager, presentation: IslandPresentation) {
+         clock: NativeClockManager, calendar: CalendarManager, presentation: IslandPresentation) {
         self.dataManager = dataManager; self.media = media
-        self.clock = clock; self.presentation = presentation
+        self.clock = clock; self.calendar = calendar; self.presentation = presentation
     }
 
     func setupPanel() {
         panel = makePanel()
         secondaryPanel = makePanel()
         let primary = HoverTrackingHostingView(rootView: NotchContentView(hoverState: hoverState,
-            dataManager: dataManager, nowPlayingManager: media, clockManager: clock, presentation: presentation))
+            dataManager: dataManager, nowPlayingManager: media, clockManager: clock, calendarManager: calendar, presentation: presentation))
         primary.hoverState = hoverState
         panel.contentView = primary
         let secondary = HoverTrackingHostingView(rootView: SecondaryActivityView(
-            dataManager: dataManager, media: media, clock: clock, presentation: presentation))
+            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation))
         secondary.hoverState = hoverState
         secondaryPanel.contentView = secondary
         observe()
@@ -79,6 +80,7 @@ final class NotchPanelController {
             DispatchQueue.main.async { self?.repositionForScreen() }
         }.store(in: &cancellables)
         media.$currentTrack.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
+        calendar.$currentEvent.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         clock.$timers.map { !$0.isEmpty }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         presentation.objectWillChange.sink { [weak self] in self?.queueUpdate() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
@@ -98,7 +100,7 @@ final class NotchPanelController {
 
     private func refreshActivities() {
         presentation.update(sports: dataManager.activeMatch != nil,
-                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty)
+                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil)
     }
 
     func repositionForScreen() {
@@ -119,6 +121,7 @@ final class NotchPanelController {
     }
 
     private var expandedHeight: CGFloat {
+        if presentation.selectedTab == .calendar { return 470 }
         if presentation.selectedTab == .clock { return 310 }
         if presentation.selectedTab == .music { return 280 }
         if dataManager.showMatchSelector { return 330 }
@@ -145,6 +148,7 @@ final class NotchPanelController {
             case .sports: width = dataManager.hasNotch ? max(600, dataManager.notchWidth + 500) : 540
             case .music: width = 420
             case .clock: width = 240
+            case .calendar: width = 420
             }
         }
         let bubbleWidth: CGFloat = 76
@@ -217,6 +221,7 @@ private struct SecondaryActivityView: View {
     @ObservedObject var dataManager: SportsDataManager
     @ObservedObject var media: NowPlayingManager
     @ObservedObject var clock: NativeClockManager
+    @ObservedObject var calendar: CalendarManager
     @ObservedObject var presentation: IslandPresentation
     var body: some View {
         Button {
@@ -229,6 +234,7 @@ private struct SecondaryActivityView: View {
                         Image(systemName: media.currentTrack?.isPlaying == true ? "music.note" : "pause.fill")
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
+                case .calendar: CalendarCompactView(manager: calendar, minimal: true)
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
                 case .sports:
                     Text(dataManager.activeMatch?.sportType.icon ?? "🏟️")

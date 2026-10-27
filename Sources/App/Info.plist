@@ -24,6 +24,10 @@
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Show your current and next calendar events in the island. Events stay on your Mac; this app does not create, edit, or delete them.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Read your calendar events to show your agenda and automatically advance to the next event.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Control the Music or Spotify player shown in your island when you click a playback button.</string>
     <key>NSHumanReadableCopyright</key>

@@ -53,7 +53,7 @@ struct NotchContentView_Previews: PreviewProvider {
         let presentation = IslandPresentation()
         presentation.expanded = expanded
         return NotchContentView(hoverState: hoverState, dataManager: dataManager,
-            nowPlayingManager: NowPlayingManager(), clockManager: NativeClockManager(), presentation: presentation)
+            nowPlayingManager: NowPlayingManager(), clockManager: NativeClockManager(), calendarManager: CalendarManager(), presentation: presentation)
             .frame(width: expanded ? 400 : 340, height: expanded ? 360 : 36)
             .padding()
             .background(Color.black.opacity(0.85))

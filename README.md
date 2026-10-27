@@ -1,3 +1,5 @@
+> Calendar update: today’s collapsed event advances automatically at its end time. Apple Calendar events stay untouched. See [calendar behavior and setup](docs/CALENDAR.md).
+
 # 🏟️ NotchIslandSports
 
 > **1.1 preview:** Battery/lifecycle fixes and split sports, music, and **native Apple Clock observation** are implemented on this branch. No in-app timers were added. Native Clock and system media integration are experimental. [Download/build instructions](docs/BUILDING.md) · [Changes and test checklist](docs/IMPLEMENTATION.md). The root ZIP below is still the older build.

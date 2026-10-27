@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let dataManager = SportsDataManager()
     private let media = NowPlayingManager()
     private let clock = NativeClockManager()
+    private let calendar = CalendarManager()
     private let presentation = IslandPresentation()
     private var systemSleeping = false
     private var displaySleeping = false
@@ -79,6 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let openItem = NSMenuItem(title: "Open Island", action: #selector(openIsland), keyEquivalent: "o")
         openItem.target = self
         menu.addItem(openItem)
+        let calendarItem = NSMenuItem(title: "Apple Calendar…", action: #selector(openNativeCalendar), keyEquivalent: "c")
+        calendarItem.target = self
+        menu.addItem(calendarItem)
         let clockItem = NSMenuItem(title: "Apple Clock…", action: #selector(openNativeClock), keyEquivalent: "t")
         clockItem.target = self
         menu.addItem(clockItem)
@@ -121,7 +125,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Panel Controller
     
     private func setupPanelController() {
-        panelController = NotchPanelController(dataManager: dataManager, media: media, clock: clock, presentation: presentation)
+        panelController = NotchPanelController(dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation)
         panelController.setupPanel()
     }
     
@@ -132,6 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dataManager.startPolling()
         media.startPolling()
         clock.start()
+        calendar.start()
         panelController.show()
     }
 
@@ -141,6 +146,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dataManager.stopPolling()
         media.stopPolling()
         clock.stop()
+        calendar.stop()
         panelController?.hide()
     }
 
@@ -192,6 +198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func openIsland() { panelController.open(presentation.selection.primary ?? .sports) }
+    @objc private func openNativeCalendar() { panelController.open(.calendar) }
     @objc private func openNativeClock() { panelController.open(.clock) }
     @objc private func toggleMedia(_ sender: NSMenuItem) {
         media.enabled.toggle()
@@ -207,7 +214,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Native Clock observation\n\nVersion 1.1 Preview\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.2 Preview\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()

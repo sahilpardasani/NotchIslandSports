@@ -90,6 +90,7 @@ struct NotchContentView: View {
     @ObservedObject var dataManager: SportsDataManager
     @ObservedObject var nowPlayingManager: NowPlayingManager
     @ObservedObject var clockManager: NativeClockManager
+    @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var presentation: IslandPresentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -100,6 +101,7 @@ struct NotchContentView: View {
                     HStack(spacing: 6) {
                         tab("Sports", icon: "sportscourt", activity: .sports)
                         tab("Music", icon: "music.note", activity: .music)
+                        tab("Calendar", icon: "calendar", activity: .calendar)
                         tab("Clock", icon: "timer", activity: .clock)
                         Button { presentation.collapse() } label: { Image(systemName: "xmark") }
                             .buttonStyle(.plain).accessibilityLabel("Collapse island")
@@ -122,6 +124,7 @@ struct NotchContentView: View {
                                         .font(.caption).foregroundColor(.secondary)
                                 }
                             }
+                        case .calendar: NativeCalendarView(manager: calendarManager, presentation: presentation)
                         case .clock: NativeClockView(manager: clockManager)
                         }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -137,6 +140,7 @@ struct NotchContentView: View {
                         switch presentation.selection.primary ?? .sports {
                         case .sports: CollapsedScoreView(dataManager: dataManager)
                         case .music: NowPlayingCollapsedView(manager: nowPlayingManager)
+                        case .calendar: CalendarCompactView(manager: calendarManager)
                         case .clock: NativeClockCompactView(manager: clockManager, minimal: false)
                         }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,6 +151,7 @@ struct NotchContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18).fill(Color.black))
+        .clipShape(RoundedRectangle(cornerRadius: presentation.expanded ? 20 : 18))
         .foregroundColor(.white)
         .preferredColorScheme(.dark)
         .transaction { if reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }

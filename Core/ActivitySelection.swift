@@ -1,7 +1,7 @@
 import Foundation
 
 public enum IslandActivity: String, CaseIterable, Codable, Sendable {
-    case sports, music, clock
+    case sports, music, clock, calendar
 }
 
 /// Pure selection: content updates never reorder slots; explicit selection can.
