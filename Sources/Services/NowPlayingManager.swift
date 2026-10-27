@@ -43,7 +43,7 @@ final class NowPlayingManager: ObservableObject {
     }
     var canControl: Bool {
         guard let id = currentTrack?.sourceBundleID else { return false }
-        return adapter.listening || id == "com.apple.Music" || id == "com.spotify.client"
+        return adapter.listening || NativeMediaPlayer(rawValue: id) != nil
     }
     func elapsedTime() -> TimeInterval { positionAnchor.value(at: ProcessInfo.processInfo.systemUptime) }
     private var getPID: (@convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void)?
@@ -299,7 +299,7 @@ final class NowPlayingManager: ObservableObject {
     func skipForward15() { send(.forward) }
     func skipBackward15() { send(.backward) }
 
-    private enum Command { case playPause, next, previous, forward, backward }
+    private typealias Command = NativeMediaPlayer.Command
     private func send(_ command: Command) {
         if adapter.listening, isActive, enabled, let track = currentTrack {
             let id: Int
@@ -311,28 +311,31 @@ final class NowPlayingManager: ObservableObject {
             case .backward: id = 12
             }
             adapter.send(id, expected: track) { [weak self] success in
-                self?.controlError = success ? nil : "The media player changed or rejected this control. Try again."
+                guard let self, self.isActive, self.enabled,
+                      self.currentTrack?.sourceBundleID == track.sourceBundleID,
+                      self.currentTrack?.title == track.title else { return }
+                if success { self.controlError = nil }
+                else if NativeMediaPlayer(rawValue: track.sourceBundleID ?? "") != nil {
+                    self.sendNative(command, expected: track)
+                } else { self.controlError = "The media player changed or rejected this control. Try again." }
             }
             return
         }
-        guard canControl, commandProcess == nil, let source = currentTrack?.sourceBundleID,
-              let getPID else { return }
+        guard let track = currentTrack else { return }
+        sendNative(command, expected: track)
+    }
+
+    private func sendNative(_ command: Command, expected track: NowPlayingTrack) {
+        guard isActive, enabled, commandProcess == nil, let source = track.sourceBundleID,
+              let player = NativeMediaPlayer(rawValue: source), let getPID else { return }
         getPID(DispatchQueue.main) { [weak self] pid in
-            guard let self, self.isActive, self.currentTrack?.sourceBundleID == source,
+            guard let self, self.isActive, self.enabled, self.currentTrack?.sourceBundleID == source,
+                  self.currentTrack?.title == track.title,
                   NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == source,
                   self.commandProcess == nil else { return }
-            let action: String
-            switch command {
-            case .playPause: action = "playpause"
-            case .next: action = "next track"
-            case .previous: action = "previous track"
-            case .forward: action = "set player position to (player position + 15)"
-            case .backward: action = "set newPosition to (player position - 15)\nif newPosition < 0 then set newPosition to 0\nset player position to newPosition"
-            }
-            let application = source == "com.apple.Music" ? "Music" : "Spotify"
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", "tell application \"\(application)\" \n\(action)\nend tell"]
+            process.arguments = ["-e", player.script(for: command)]
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             process.terminationHandler = { [weak self] process in

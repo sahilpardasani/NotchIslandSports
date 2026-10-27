@@ -135,19 +135,12 @@ struct NowPlayingExpandedView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .shadow(color: track.dominantColor.opacity(0.4), radius: 10, x: 0, y: 4)
                             } else {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [track.dominantColor.opacity(0.7), Color.black.opacity(0.5)],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        )
-                                    )
+                                Circle().fill(track.dominantColor.opacity(0.18))
+                                    .frame(width: 60, height: 60)
+                                    .overlay(Image(systemName: "music.note")
+                                        .font(.system(size: 25, weight: .semibold))
+                                        .foregroundColor(track.dominantColor))
                                     .frame(width: 72, height: 72)
-                                    .overlay(
-                                        Image(systemName: "music.note")
-                                            .font(.system(size: 28, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.9))
-                                    )
                             }
                         }
 
@@ -293,7 +286,7 @@ struct NowPlayingExpandedView: View {
 
                         Spacer()
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 26)
                     .padding(.top, 10)
                     .padding(.bottom, 6)
                 }

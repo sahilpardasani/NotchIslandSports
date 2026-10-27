@@ -63,6 +63,28 @@ import IslandCore
         check(IslandDragIntent.resolve(horizontal: 1, vertical: -20, heldFor: 0.4) == .close, "Held push still collapses")
         check(IslandDragIntent.resolve(horizontal: 5, vertical: 2, heldFor: 1) == nil, "Hold jitter never toggles")
         check(IslandDragIntent.resolve(horizontal: 20, vertical: 20, heldFor: 1) == nil, "Ambiguous diagonal waits for intent")
+        for player in NativeMediaPlayer.allCases {
+            var native = payload
+            native["bundleIdentifier"] = player.rawValue; native["title"] = "Native song"
+            native["artist"] = "Artist"; native["playing"] = true
+            let snapshot = MediaSnapshot.decode(try packet(native))!
+            check(snapshot.bundleID == player.rawValue && snapshot.artist == "Artist", "Native app metadata accepted")
+            var nativeSession = MediaSessionPresence()
+            check(nativeSession.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: true), "Native playback creates activity")
+            check(nativeSession.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: false), "Native pause retains controls")
+            check(!nativeSession.update(bundleID: "com.apple.Safari", title: "Old video", playing: false), "Switching source rejects cached paused browser")
+            check(player.script(for: .playPause).contains("application id \"\(player.rawValue)\""), "Control targets exact native application")
+            check(player.script(for: .backward).contains("if newPosition < 0"), "Native backwards seek cannot go negative")
+            nativeSession.clear()
+            check(!nativeSession.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: false), "Quit native app cannot resurrect paused activity")
+        }
+        check(NativeMediaPlayer(rawValue: "com.apple.Safari") == nil, "Browser cannot fall through to native control")
+        check(NativeMediaPlayer(rawValue: "com.spotify.client.helper") == nil, "Unknown helper is not a control destination")
+        check(IslandDragIntent.isInward(horizontal: 24, vertical: 2, satelliteOnLeft: true), "Plain rightward drag merges left satellite")
+        check(IslandDragIntent.isInward(horizontal: -24, vertical: 2, satelliteOnLeft: false), "Plain leftward drag merges relocated right satellite")
+        check(!IslandDragIntent.isInward(horizontal: -24, vertical: 2, satelliteOnLeft: true), "Outward drag still pages")
+        check(!IslandDragIntent.isInward(horizontal: 8, vertical: 2, satelliteOnLeft: true), "Jitter cannot merge")
+        check(!IslandDragIntent.isInward(horizontal: 24, vertical: 30, satelliteOnLeft: true), "Pull down never merges")
         print("Passed \(count) media snapshot, lifecycle, motion and gesture checks.")
     }
 }

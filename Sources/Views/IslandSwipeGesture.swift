@@ -7,6 +7,7 @@ struct IslandSwipeGesture: ViewModifier {
     @ObservedObject var presentation: IslandPresentation
     var headerOnly = false
     var pullDownActivity: IslandActivity?
+    var inwardSwipe: CGFloat?
     @State private var started: Date?
     @State private var committed = false
     @GestureState private var interacting = false
@@ -40,6 +41,11 @@ struct IslandSwipeGesture: ViewModifier {
                           let intent = IslandDragIntent.resolve(horizontal: value.translation.width,
                             vertical: value.translation.height, heldFor: value.time.timeIntervalSince(started)) else { return }
                     committed = true
+                    if let inwardSwipe, IslandDragIntent.isInward(horizontal: value.translation.width,
+                        vertical: value.translation.height, satelliteOnLeft: inwardSwipe > 0) {
+                        presentation.mergeActivities()
+                        return
+                    }
                     switch intent {
                     case .toggleMerge: presentation.setMerged(!presentation.merged); presentation.collapse()
                     case .next: presentation.cyclePrimary()

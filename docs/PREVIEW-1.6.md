@@ -1,11 +1,28 @@
-# Preview 1.6 (build 8) — compact layout, smooth reveal and explicit Clock setup
+# Preview 1.6 (build 9) — native media, compact Calendar and adaptive placement
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 8 fixes
+## Build 9 changes (current)
 
-Version stays 1.6.0; CFBundleVersion is 8 and About identifies build 8. This replaces the earlier 1.6 package.
+Version remains 1.6.0; bundle and About build number are 9. These changes replace build 8 behavior where noted.
+
+- Spotify (`com.spotify.client`) and Apple Music (`com.apple.Music`) use the shared event-driven Now Playing feed for title, artwork, progress, pause state and split presence. No browser tab is required. Both apps share one media slot: macOS selects the current player. Playing creates an activity; pausing the observed session retains controls; source withdrawal or quitting removes it. Cached paused metadata at startup does not create an activity.
+- If a system transport command fails for either native player, a fixed AppleScript command targets that exact app only after checking the displayed title, bundle ID, current system player and running PID again. Play/pause, previous/next and ±15-second seek are covered. Automation consent may be requested on first fallback use. Browser failures never fall through to Music or Spotify. Detection still depends on experimental/private MediaRemote; native fallback is transport only, not an independent discovery API. Native app playback has not been verified end-to-end here.
+- Swiping to Calendar stays collapsed, displaying the current/next same-day event. Pull down explicitly opens the agenda; swipe up returns to compact Calendar. Calendar never occupies a live-activity slot and no events are deleted or changed.
+- A plain inward drag on either small pill merges all satellites into the primary. It follows the pill's actual side after relocation. Hold and swipe on the primary restores separate activities; keyboard/accessibility actions remain available.
+- Compact positioning considers application-menu and status-window bounds. Crowding on one side moves content and satellite pills to the other; excess pills merge if no gap fits. The physical camera stays covered. The reader is debounced and event-driven, bounds work on a utility queue, stops during suspension, and publishes changed geometry only. No new idle polling loop, screen recording or menu-title collection is added.
+- Accurate application-menu bounds use already-granted Accessibility permission. When unavailable, reserve the app-menu side conservatively, plus 240 points for right-side system controls. Placement remains best effort: macOS does not expose every status item consistently; re-evaluation occurs on app/window/layout/display changes. Expanded panels still open centered under the camera.
+- Expanded media has curved shoulders and a lower contour around playback controls and the swipe handle. Missing artwork uses a circular music emblem. Actual album artwork remains intact.
+- Panel backing uses sRGB and opaque black content. Software cannot eliminate the physical camera housing's optical reflections or make it invisible from every viewing angle.
+
+Validation: 203 standalone checks plus the no-hover source guard; release compilation and synthetic renders of actual SwiftUI views. Tests cover native media identities/lifecycle, safe native routing, inward gestures, compact Calendar and crowded-menu geometry. Live menu placement, native player controls and frame pacing still require device verification. No battery/FPS improvement is claimed from fixtures alone.
+
+Implementation references: [application menu accessibility attribute](https://developer.apple.com/documentation/applicationservices/kaxmenubarattribute), [screen camera-safe area](https://developer.apple.com/documentation/appkit/nsscreen/auxiliarytopleftarea), [window geometry metadata](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo(_:_:)).
+
+## Build 8 changes retained
+
+The following changes originated in build 8 and remain unless superseded above.
 
 - The compact primary is now camera width + 224 points (404 points with a 180-point camera), with satellites capped at 96 points. The physical camera remains centered and every capsule stays inside the camera/menu-bar band. This leaves more room for the app menu; third-party overlays cannot reserve menu-bar space across every possible app/menu configuration.
 - Sports satellites show score only, stripping parenthesized overs/target commentary. Their labels are explicitly constrained and clipped to their capsules. Full score details remain in the expanded sports page.
@@ -14,7 +31,7 @@ Version stays 1.6.0; CFBundleVersion is 8 and About identifies build 8. This rep
 - First-time Clock setup explicitly offers Connect Apple Clock or Skip Clock. A previously explicit disabled preference is respected. Done remains disabled while permission or a connection is pending. Accessibility permission is checked once per second only while setup is open; after the grant, an explicit connection action launches Clock without activating it, locates a unique native Timers tab and selects it without starting or modifying timers. Cold launch gets at most three bounded attempts and a six-second overall timeout. Unsupported layouts show Retry instead of falsely claiming setup succeeded.
 - Completed setup is retained. Missing/revoked Accessibility permission or an unfinished connection reopens the setup window at launch when Clock is enabled. Replacing an ad hoc signed app may still require the user to grant macOS permission again; the app cannot grant its own permissions.
 
-Current verification: 171 standalone checks plus the no-hover guard passed. A release build and actual SwiftUI layout renders passed. New checks cover compact score truncation, smaller geometry, Clock setup readiness/permission revocation, and retaining/reversing the displayed page during collapse. Live display frame pacing and native timer control still require device verification; no measured FPS claim is made. The user’s supplied screenshot confirms browser-media metadata is appearing in the earlier 1.6 app.
+Build 8 verification: 171 standalone checks plus the no-hover guard passed. A release build and actual SwiftUI layout renders passed. New checks cover compact score truncation, smaller geometry, Clock setup readiness/permission revocation, and retaining/reversing the displayed page during collapse. Live display frame pacing and native timer control still require device verification; no measured FPS claim is made. The user’s supplied screenshot confirms browser-media metadata is appearing in the earlier 1.6 app.
 
 ## Visible changes
 
@@ -49,7 +66,7 @@ References: [upstream adapter](https://github.com/ungive/mediaremote-adapter), [
 
 ## Verification
 
-- 171 standalone logic checks passed: activity selection/gestures, Calendar boundaries, geometry, Clock parsing/control policy, browser metadata parsing and limits. A separate source guard fails if hover state, tracking areas or pointer entry/exit/movement handlers are introduced.
+- 203 standalone logic checks passed: activity selection/gestures, Calendar boundaries, geometry, Clock parsing/control policy, browser metadata parsing and limits. A separate source guard fails if hover state, tracking areas or pointer entry/exit/movement handlers are introduced.
 - Release app compiled with Command Line Tools and macOS 26.5 SDK. Strict ad hoc signature and ZIP checks are performed on the packaged output.
 - Actual SwiftUI fixture renders reviewed for timer and media content. These are synthetic layout previews, not proof of live integrations.
 - The native media helper launched and returned valid empty JSON in the current environment. Its upstream self-test did not establish an active session (exit 4 with the command-line test publisher; exit 3 with a bundled publisher that did not report ready). This is not a passing live compatibility result.
@@ -62,7 +79,7 @@ References: [upstream adapter](https://github.com/ungive/mediaremote-adapter), [
 2. Move the pointer across every capsule and away repeatedly. Neither expansion nor collapse should occur. Pull down, then swipe up; the top edge must stay at the physical notch.
 3. Start a YouTube video in Safari or Chrome while a sports activity is present. With Separate Live Activities enabled, expect a media satellite; open it and check title, artwork if exposed, pause/resume and source changes. Stop playback and close the tab; confirm stale media clears when macOS clears its session.
 4. Start a disposable timer in Apple Clock. Grant Accessibility once, return from Settings, and confirm automatic observation. Test Pause/Resume/Stop from the notch; cancel the confirmation first, then confirm it. Check another timer is untouched. Repeat with Clock behind other windows, hidden/minimized if macOS still exposes it, and after permission revocation.
-5. Show sports + music + timer, then swipe to Calendar. Calendar must not replace a live slot. Let an event end and confirm only the island advances to the next same-day event; Apple Calendar itself must be unchanged.
+5. Show sports + music + timer, then swipe to Calendar. It must stay compact and must not replace a live slot. Pull down to open the agenda, swipe up to return to compact Calendar. Let an event end and confirm only the island advances to the next same-day event; Apple Calendar itself must be unchanged.
 6. Sleep/wake and disable/re-enable integrations. No duplicate helper or stale activity should survive. Verify actual Energy Impact and wakeups before making battery claims.
 
 ### Music title and playback motion (build 8)
@@ -82,3 +99,9 @@ The media lifecycle now rejects old paused metadata at app startup, keeps a sess
 Expanded media content now uses 180 points instead of 220 (206 when a connection/control message needs room). Cricket uses 320 instead of 360, preserving its scrolling scorecard and bottom handle. The camera band and handle are added separately, so trimming the empty footer does not move content behind the physical notch.
 
 The main collapsed cricket island also shows only team abbreviations and scores, with no overs suffix (for example, `ZIM 132/7` and `177 AFG`). Overs and target details remain in the expanded scorecard.
+
+### Additional build 9 device checks
+
+- Play a song in Spotify, then Apple Music. Verify the one media slot switches source and artwork, pause/resume, previous/next, and ±15 seconds on seekable local tracks. Quit the displayed player: its stale pill must disappear. Check native playback with no browser running. Deny Automation: fallback must fail visibly without opening another app or changing playback elsewhere.
+- With three activities, swipe either satellite toward the camera without holding. Only the primary remains. Provider updates must not undo the merge; hold and swipe on the primary to split again.
+- Switch between short and long app menus and multiple displays, with and without Accessibility permission. Compact pills should relocate or merge before overlapping measured menus. Verify no hover behavior and no idle layout/AX loop.

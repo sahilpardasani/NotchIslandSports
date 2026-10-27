@@ -111,7 +111,8 @@ struct NotchContentView: View {
     private func islandSurface(size: CGSize) -> some View {
         let travel = max(1, presentation.expandedPanelHeight - compactHeight)
         let progress: CGFloat = min(1, max(0, (size.height - compactHeight) / travel))
-        let radius: CGFloat = presentation.expanded ? 20 : 18
+        let shape = IslandSurfaceShape(media: presentation.contentActivity == .music &&
+            (presentation.expanded || presentation.expandedContentMounted), expanded: presentation.expanded)
         return ZStack(alignment: .top) {
             if presentation.expanded || presentation.expandedContentMounted {
                 expandedSurface(progress: progress)
@@ -121,11 +122,10 @@ struct NotchContentView: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .top)
-        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-            .strokeBorder(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
+        .background(shape.fill(Color.black))
+        .overlay(shape.stroke(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
             .allowsHitTesting(false))
-        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .clipShape(shape)
         .foregroundColor(.white)
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
@@ -175,13 +175,14 @@ struct NotchContentView: View {
     }
 
     private var compactAccessibilityLabel: String {
-        if presentation.selection.primary == .music { return "Expand music: \(nowPlayingManager.currentTrack?.title ?? "Music")" }
-        return "Expand \(presentation.selection.primary?.rawValue ?? "sports") activity"
+        if presentation.collapsedActivity == .music { return "Expand music: \(nowPlayingManager.currentTrack?.title ?? "Music")" }
+        return "Expand \(presentation.collapsedActivity.rawValue) activity"
     }
 
     private func compactSurface(progress: CGFloat) -> some View {
-        Button { presentation.open(presentation.selection.primary ?? .sports) } label: {
+        Button { presentation.open(presentation.collapsedActivity) } label: {
             compactPage.frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.compactNotchInsets, presentation.compactInsets)
         }
         .buttonStyle(.plain)
         .frame(height: compactHeight)
@@ -192,7 +193,7 @@ struct NotchContentView: View {
     }
 
     @ViewBuilder private var compactPage: some View {
-        switch presentation.selection.primary ?? .sports {
+        switch presentation.collapsedActivity {
         case .sports: CollapsedScoreView(dataManager: dataManager)
         case .music: cameraSafeCompact(.music)
         case .calendar: cameraSafeCompact(.calendar)
@@ -222,9 +223,13 @@ struct NotchContentView: View {
         } right: {
             Group {
                 if activity == .clock { NativeClockCompactView(manager: clockManager, minimal: true) }
-                else if activity == .calendar, let event = calendarManager.currentEvent {
-                    Text(event.allDay ? "All day" : event.start.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 11, weight: .semibold)).foregroundColor(.cyan)
+                else if activity == .calendar {
+                    if let event = calendarManager.currentEvent {
+                        Text(event.allDay ? "All day" : event.start.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(.cyan)
+                    } else {
+                        Text("No more today").font(.system(size: 10)).foregroundColor(.secondary)
+                    }
                 } else {
                     DynamicIslandWaveform(isPlaying: nowPlayingManager.currentTrack?.isPlaying == true,
                         color: .cyan, barCount: 5, animationAllowed: mediaMotionAllowed && !presentation.expanded)

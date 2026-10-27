@@ -18,7 +18,7 @@ import IslandCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-menu-crowded", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
@@ -34,11 +34,20 @@ import IslandCore
                 presentation.update(sports: true, music: true, clock: false)
                 presentation.promote(.music); presentation.collapse(); presentation.finishResize()
             }
+            if name == "notch-calendar-compact" { presentation.cyclePrimary(forward: false) }
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
                 contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
+            let occupied = name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
+            let placement = MenuBarPlacement.layout(base: geometry, screen: screen, occupied: occupied,
+                expanded: activity != nil, satelliteCount: 2)
+            presentation.compactInsets = placement.insets
+            presentation.secondaryFits = placement.secondary != nil; presentation.tertiaryFits = placement.tertiary != nil
+            presentation.secondaryOnLeft = (placement.secondary?.midX ?? 0) < 600
+            presentation.tertiaryOnLeft = (placement.tertiary?.midX ?? 1200) < 600
+            let primary = placement.primary, secondary = placement.secondary ?? geometry.secondary, tertiary = placement.tertiary ?? geometry.tertiary
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
             if activity != nil { presentation.expandedPanelWidth = geometry.primary.width }
             if name == "notch-merged" { presentation.mergeActivities() }
@@ -49,16 +58,16 @@ import IslandCore
                     .padding(.top, canvasHeight - 30).padding(.leading, 28)
                 NotchContentView( dataManager: data, nowPlayingManager: media,
                     clockManager: clock, calendarManager: calendar, presentation: presentation)
-                    .frame(width: geometry.primary.width, height: geometry.primary.height)
-                    .position(x: geometry.primary.midX, y: screen.maxY - geometry.primary.midY)
+                    .frame(width: primary.width, height: primary.height)
+                    .position(x: primary.midX, y: screen.maxY - primary.midY)
                 if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar,
                     presentation: presentation, third: false)
-                    .frame(width: geometry.secondary.width, height: geometry.secondary.height)
-                    .position(x: geometry.secondary.midX, y: screen.maxY - geometry.secondary.midY) }
+                    .frame(width: secondary.width, height: secondary.height)
+                    .position(x: secondary.midX, y: screen.maxY - secondary.midY) }
                 if presentation.showsTertiary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar,
                     presentation: presentation, third: true)
-                    .frame(width: geometry.tertiary.width, height: geometry.tertiary.height)
-                    .position(x: geometry.tertiary.midX, y: screen.maxY - geometry.tertiary.midY) }
+                    .frame(width: tertiary.width, height: tertiary.height)
+                    .position(x: tertiary.midX, y: screen.maxY - tertiary.midY) }
                 RoundedRectangle(cornerRadius: 8).fill(Color.black)
                     .overlay(Circle().fill(Color(red: 0.04, green: 0.06, blue: 0.09)).frame(width: 6, height: 6))
                     .frame(width: 180, height: 32).position(x: 600, y: 16)

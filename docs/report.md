@@ -1,5 +1,7 @@
 > **1.5 update:** [Restored UI and timer controls](TIMER-UI-RESTORATION.md) is the current UI/Clock behavior. Headerless scorecards, bottom handle, compact countdown with circular native buttons; setup stays in the menu bar.
 
+> **Current preview:** [Version 1.6 build 9](PREVIEW-1.6.md) supersedes historical interaction/setup descriptions below. Calendar is a compact swipe page, native Music/Spotify share the system media activity, and inward satellite swipes merge. See that document for implemented scope and live-test limitations.
+
 > **Current 1.4 behavior:** [Interaction update](INTERACTION-UPDATE.md) supersedes older Calendar-slot/tab-bar instructions below. Three live slots are reserved for sports, music and native Clock; Calendar is swipe-only. Setup is in the menu bar. Hold-and-swipe merges. The compact strip fits the camera band. Approval/delivery integrations remain unimplemented; the update documents supported hook research.
 
 > Latest follow-up: [notch restoration and three activities](NOTCH-RESTORATION.md) supersedes the earlier below-camera/two-slot placement and observation-only Clock behavior. Clock controls are now experimental and user-triggered; Calendar remains strictly read-only.
@@ -513,3 +515,8 @@ Satellites slide 32 points outward/inward with a 0.32-second eased fade; stale c
 The media lifecycle now rejects old paused metadata at app startup, keeps a session that was observed playing when paused, and clears it on metadata withdrawal, source-app termination, adapter failure or sleep. A vendored adapter correction clears the entire stale snapshot when MediaRemote reports no player PID, rather than retaining its old title and bundle. These are Now Playing session signals, not direct browser tab enumeration. YouTube, Netflix and Prime Video work only when the browser exposes their session to macOS. If a browser retains paused metadata after a tab closes, exact tab closure is unavailable to this adapter; no claim of universal tab detection is made. An explicit browser extension would be required to promise tab-level lifecycle across those sites.
 
 Expanded media content now uses 180 points instead of 220 (206 when a connection/control message needs room). Cricket uses 320 instead of 360, preserving its scrolling scorecard and bottom handle. The camera band and handle are added separately, so trimming the empty footer does not move content behind the physical notch.
+
+
+### Version 1.6 build 9 follow-up
+
+Implemented compact Calendar paging without event mutation or slot consumption; inward satellite merge gestures; bounded event-driven menu geometry and conservative fallback placement; curved media controls surface; circular missing-artwork placeholder; explicit Music/Spotify native command routing with fallback after system transport failure. All existing sports/details and native Clock policies remain. See PREVIEW-1.6.md for acceptance checks, privacy boundaries and measured-vs-unverified distinctions. Native media discovery remains private MediaRemote, not a public Apple Music/Spotify discovery API. The physical notch's viewing-angle reflections cannot be fixed in software. Status-item geometry may be unavailable, so menu avoidance is best effort, especially on unusual display arrangements. No live native-player compatibility or battery savings are asserted.

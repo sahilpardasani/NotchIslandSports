@@ -23,12 +23,16 @@ import IslandCore
         check(model.selection.primary == .sports, "Opposite swipe returns")
         let slots = model.selection
         model.handleDrag(horizontal: 40, vertical: 0)
-        check(model.expanded && model.selectedTab == .calendar && model.selection == slots, "Calendar swipe opens page, preserves all slots")
+        check(!model.expanded && model.collapsedActivity == .calendar && model.selection == slots, "Calendar swipe stays compact, preserves all slots")
         let calendarOpen = publications
         for _ in 0..<100 { model.update(sports: true, music: true, clock: true, calendar: false) }
         check(publications == calendarOpen && model.selectedTab == .calendar, "Event changes never steal page or re-layout")
+        model.pullDown()
+        check(model.expanded && model.selectedTab == .calendar, "Pull down explicitly opens agenda")
         model.collapse()
-        check(model.selection == slots && model.selectedTab == .sports, "Collapse returns to live primary")
+        check(model.selection == slots && model.collapsedActivity == .calendar, "Collapse returns to compact Calendar")
+        model.cyclePrimary()
+        check(model.collapsedActivity == .sports, "Swipe leaves Calendar for sports")
         model.handleDrag(horizontal: -45, vertical: 2, held: true)
         check(model.merged && !model.expanded && !model.showsSecondary && !model.showsTertiary, "Held swipe merges")
         check(model.selection == slots, "Held gesture does not also cycle the primary")
@@ -50,7 +54,7 @@ import IslandCore
         for _ in 0..<100 { model.update(sports: false, music: false, clock: false, calendar: true) }
         check(publications == empty, "Empty state must not loop")
         model.cyclePrimary()
-        check(model.expanded && model.selectedTab == .calendar, "Calendar reachable with no live activities")
+        check(!model.expanded && model.collapsedActivity == .calendar, "Compact Calendar reachable with no live activities")
         model.collapse()
         model.update(sports: true, music: false, clock: true, calendar: true)
         check(model.selection.tertiary == nil, "Calendar doesn't make a third satellite")

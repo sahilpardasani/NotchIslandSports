@@ -20,6 +20,8 @@ final class NotchPanelController {
     private let clock: NativeClockManager
     let presentation: IslandPresentation
     private var cancellables = Set<AnyCancellable>()
+    private let menuContext = MenuBarContextReader()
+    private var occupiedMenuFrames: [CGRect] = []
     private var screen: NSScreen?
     private var updateQueued = false
     private var keyboardOpened = false
@@ -54,7 +56,7 @@ final class NotchPanelController {
             self.presentation.open(activity)
         }
         secondary.onScrollPush = { [weak self] in self?.presentation.collapse() }
-        secondary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held) }
+        secondary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held, satelliteLeft: self?.presentation.secondaryOnLeft) }
         secondaryPanel.contentView = secondary
         let tertiary = IslandGestureHostingView(rootView: SecondaryActivityView(
             dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: true))
@@ -63,14 +65,21 @@ final class NotchPanelController {
             self.presentation.open(activity)
         }
         tertiary.onScrollPush = { [weak self] in self?.presentation.collapse() }
-        tertiary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held) }
+        tertiary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held, satelliteLeft: self?.presentation.tertiaryOnLeft) }
         tertiaryPanel.contentView = tertiary
+        menuContext.excludedWindows = Set([panel, secondaryPanel, tertiaryPanel].map { CGWindowID($0!.windowNumber) })
+        menuContext.onChange = { [weak self] frames in
+            self?.occupiedMenuFrames = frames
+            self?.updateFrames(animated: false)
+        }
         observe()
+        menuContext.start()
         repositionForScreen()
         refreshActivities()
     }
 
-    private func scrollSideways(forward: Bool, held: Bool) {
+    private func scrollSideways(forward: Bool, held: Bool, satelliteLeft: Bool? = nil) {
+        if let satelliteLeft, satelliteLeft == !forward { presentation.mergeActivities(); return }
         if held { presentation.setMerged(!presentation.merged); presentation.collapse() }
         else { presentation.cyclePrimary(forward: forward) }
     }
@@ -82,6 +91,7 @@ final class NotchPanelController {
         result.backgroundColor = .clear
         result.isOpaque = false
         result.hasShadow = false
+        result.colorSpace = .sRGB
         result.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         result.hidesOnDeactivate = false
         result.isMovable = false
@@ -108,6 +118,9 @@ final class NotchPanelController {
         presentation.$expanded.removeDuplicates().dropFirst().sink { [weak self] expanded in
             guard !expanded else { return }
             self?.dataManager.showMatchSelector = false
+        }.store(in: &cancellables)
+        presentation.$suspended.removeDuplicates().sink { [weak self] suspended in
+            if suspended { self?.menuContext.stop() } else { self?.menuContext.start() }
         }.store(in: &cancellables)
         presentation.objectWillChange.sink { [weak self] in self?.queueUpdate() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
@@ -143,6 +156,7 @@ final class NotchPanelController {
         dataManager.hasNotch = geometry.cameraHeight > 0
         dataManager.notchWidth = geometry.cameraWidth
         if presentation.cameraHeight != geometry.cameraHeight { presentation.cameraHeight = geometry.cameraHeight }
+        menuContext.refresh()
         updateFrames(animated: false)
     }
 
@@ -182,13 +196,24 @@ final class NotchPanelController {
             if presentation.expandedPanelWidth != layout.primary.width { presentation.expandedPanelWidth = layout.primary.width }
             if !presentation.expandedContentMounted { presentation.expandedContentMounted = true }
         }
+        let count = presentation.merged ? 0 : (presentation.selection.tertiary != nil ? 2 : presentation.selection.secondary != nil ? 1 : 0)
+        let fallback = [CGRect(x: screen.frame.minX, y: layout.primary.maxY - 60,
+            width: max(0, layout.centerX - layout.cameraWidth / 2 - screen.frame.minX), height: 60),
+            CGRect(x: screen.frame.maxX - 240, y: layout.primary.maxY - 60, width: 240, height: 60)]
+        let placement = MenuBarPlacement.layout(base: layout, screen: screen.frame, occupied: occupiedMenuFrames.isEmpty ? fallback : occupiedMenuFrames,
+            expanded: presentation.expanded, satelliteCount: count)
+        if !presentation.expanded, presentation.compactInsets != placement.insets { presentation.compactInsets = placement.insets }
+        if presentation.secondaryFits != (placement.secondary != nil) { presentation.secondaryFits = placement.secondary != nil }
+        if presentation.tertiaryFits != (placement.tertiary != nil) { presentation.tertiaryFits = placement.tertiary != nil }
+        if let frame = placement.secondary, presentation.secondaryOnLeft != (frame.midX < layout.centerX) { presentation.secondaryOnLeft = frame.midX < layout.centerX }
+        if let frame = placement.tertiary, presentation.tertiaryOnLeft != (frame.midX < layout.centerX) { presentation.tertiaryOnLeft = frame.midX < layout.centerX }
         (panel.contentView as? IslandGestureHostingView<NotchContentView>)?.swipeHeaderHeight = presentation.cameraHeight + 8
         let animate = animated && !presentation.reduceMotion && !presentation.lowPower
-        setFrame(panel, layout.primary, animated: animate, completion: { [weak self] in self?.presentation.finishResize() })
+        setFrame(panel, placement.primary, animated: animate, completion: { [weak self] in self?.presentation.finishResize() })
         panel.acceptsKeyboard = presentation.expanded
         if !panel.isVisible { panel.orderFrontRegardless() }
-        showSatellite(secondaryPanel, frame: layout.secondary, visible: presentation.showsSecondary, animated: animate)
-        showSatellite(tertiaryPanel, frame: layout.tertiary, visible: presentation.showsTertiary, animated: animate)
+        showSatellite(secondaryPanel, frame: placement.secondary ?? secondaryPanel.frame, visible: presentation.showsSecondary, animated: animate)
+        showSatellite(tertiaryPanel, frame: placement.tertiary ?? tertiaryPanel.frame, visible: presentation.showsTertiary, animated: animate)
         let policy = "\(presentation.expanded && presentation.selectedTab == .sports):\(presentation.lowPower)"
         if policy != lastDetailPresentation {
             lastDetailPresentation = policy
@@ -298,7 +323,7 @@ struct SecondaryActivityView: View {
                         DynamicIslandWaveform(isPlaying: media.currentTrack?.isPlaying == true,
                             color: media.currentTrack?.dominantColor ?? .cyan, barCount: 5,
                             animationAllowed: MediaMotion.allowed(playing: media.currentTrack?.isPlaying == true,
-                                active: media.isActive, visible: !presentation.suspended && !presentation.merged,
+                                active: media.isActive, visible: !presentation.suspended && (third ? presentation.showsTertiary : presentation.showsSecondary),
                                 reduceMotion: presentation.reduceMotion, lowPower: presentation.lowPower))
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
@@ -318,7 +343,7 @@ struct SecondaryActivityView: View {
           }
         }
         .buttonStyle(.plain)
-        .modifier(IslandSwipeGesture(presentation: presentation, pullDownActivity: activity))
+        .modifier(IslandSwipeGesture(presentation: presentation, pullDownActivity: activity, inwardSwipe: (third ? presentation.tertiaryOnLeft : presentation.secondaryOnLeft) ? 1 : -1))
         .background(Capsule().fill(Color.black))
         .clipShape(Capsule())
         .accessibilityLabel("Open \(activity?.rawValue ?? "activity") activity")

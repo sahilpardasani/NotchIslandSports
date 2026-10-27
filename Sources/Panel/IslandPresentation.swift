@@ -6,6 +6,13 @@ import IslandCore
 final class IslandPresentation: ObservableObject {
     @Published private(set) var selection = ActivitySelection()
     @Published private(set) var merged: Bool
+    @Published private(set) var compactCalendar = false
+    var collapsedActivity: IslandActivity { compactCalendar ? .calendar : (selection.primary ?? .sports) }
+    @Published var secondaryOnLeft = true
+    @Published var tertiaryOnLeft = false
+    @Published var secondaryFits = true
+    @Published var tertiaryFits = true
+    @Published var compactInsets: CompactNotchInsets?
     @Published var selectedTab: IslandActivity = .sports
     @Published var cameraHeight: CGFloat = 0
     @Published var expandedPanelHeight: CGFloat = 520
@@ -29,8 +36,8 @@ final class IslandPresentation: ObservableObject {
         self.defaults = defaults
         merged = defaults.bool(forKey: "IslandActivitiesMerged")
     }
-    var showsSecondary: Bool { !merged && selection.secondary != nil }
-    var showsTertiary: Bool { !merged && selection.tertiary != nil }
+    var showsSecondary: Bool { !merged && secondaryFits && selection.secondary != nil }
+    var showsTertiary: Bool { !merged && tertiaryFits && selection.tertiary != nil }
 
     func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false) {
         let musicEnded = available.contains(.music) && !music
@@ -45,9 +52,10 @@ final class IslandPresentation: ObservableObject {
         if next != selection { selection = next }
         if musicStarted { setMerged(false) }
         if musicEnded, expanded, selectedTab == .music { collapse() }
-        if !expanded, selectedTab != (next.primary ?? .sports) { selectedTab = next.primary ?? .sports }
+        if !expanded, selectedTab != collapsedActivity { selectedTab = collapsedActivity }
     }
     func open(_ activity: IslandActivity, pin: Bool = true) {
+        if compactCalendar != (activity == .calendar) { compactCalendar = activity == .calendar }
         if selectedTab != activity { selectedTab = activity }
         if pinned != pin { pinned = pin }
         closingTab = nil
@@ -62,12 +70,13 @@ final class IslandPresentation: ObservableObject {
     /// Calendar stays reachable even when empty or disconnected, without displacing live slots.
     func cyclePrimary(forward: Bool = true) {
         let pages = IslandActivity.allCases.filter { available.contains($0) || $0 == .calendar }
-        let current = expanded ? selectedTab : selection.primary
+        let current: IslandActivity? = expanded ? selectedTab : collapsedActivity
         let index = current.flatMap { pages.firstIndex(of: $0) }
         let nextIndex = index.map { ($0 + (forward ? 1 : pages.count - 1)) % pages.count } ?? (forward ? 0 : pages.count - 1)
         let activity = pages[nextIndex]
-        if expanded || activity == .calendar { open(activity) }
+        if expanded { open(activity) }
         else {
+            if compactCalendar != (activity == .calendar) { compactCalendar = activity == .calendar }
             var next = selection
             next.update(available: available, preferred: activity)
             if next != selection { selection = next }
@@ -80,7 +89,7 @@ final class IslandPresentation: ObservableObject {
         defaults.set(value, forKey: "IslandActivitiesMerged")
     }
     func mergeActivities() { setMerged(true); collapse() }
-    func pullDown() { open(selection.primary ?? .calendar) }
+    func pullDown() { open(collapsedActivity) }
     func handleDrag(horizontal: CGFloat, vertical: CGFloat, held: Bool = false) {
         if abs(horizontal) > abs(vertical), abs(horizontal) > 20 {
             if held { setMerged(!merged); collapse() }
@@ -92,7 +101,7 @@ final class IslandPresentation: ObservableObject {
     func collapse() {
         if pinned { pinned = false }
         if expanded { closingTab = selectedTab; expanded = false }
-        let activity = selection.primary ?? .sports
+        let activity = collapsedActivity
         if selectedTab != activity { selectedTab = activity }
     }
 }
