@@ -37,10 +37,11 @@ import IslandCore
                 expandedWidth: activity == .clock ? 440 : 600)
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
             if name == "notch-merged" { presentation.mergeActivities() }
+            let canvasHeight = activity == nil ? 100.0 : geometry.primary.height + 60
             let view = ZStack(alignment: .topLeading) {
                 Color(red: 0.12, green: 0.14, blue: 0.19)
                 Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
-                    .padding(.top, activity == nil ? 100 : 560).padding(.leading, 28)
+                    .padding(.top, canvasHeight - 30).padding(.leading, 28)
                 NotchContentView(hoverState: HoverState(), dataManager: data, nowPlayingManager: media,
                     clockManager: clock, calendarManager: calendar, presentation: presentation)
                     .frame(width: geometry.primary.width, height: geometry.primary.height)
@@ -56,9 +57,9 @@ import IslandCore
                 RoundedRectangle(cornerRadius: 8).fill(Color.black)
                     .overlay(Circle().fill(Color(red: 0.04, green: 0.06, blue: 0.09)).frame(width: 6, height: 6))
                     .frame(width: 180, height: 32).position(x: 600, y: 16)
-            }.frame(width: 1200, height: activity == nil ? 150 : 600)
+            }.frame(width: 1200, height: canvasHeight)
             let host = NSHostingView(rootView: view)
-            host.frame = NSRect(x: 0, y: 0, width: 1200, height: activity == nil ? 150 : 600)
+            host.frame = NSRect(x: 0, y: 0, width: 1200, height: canvasHeight)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = host
             host.layoutSubtreeIfNeeded()

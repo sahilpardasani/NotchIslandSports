@@ -15,7 +15,7 @@ struct NativeClockView: View {
             if manager.timers.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "timer").font(.system(size: 24, weight: .medium)).foregroundColor(.orange)
-                    Text("No active timer").font(.system(size: 15, weight: .medium))
+                    Text("No timer available").font(.system(size: 15, weight: .medium))
                     Text("Manage native timers in the menu-bar Clock Settings.")
                         .font(.system(size: 11)).foregroundColor(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
