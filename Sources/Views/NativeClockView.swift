@@ -15,8 +15,8 @@ struct NativeClockView: View {
             if manager.timers.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "timer").font(.system(size: 24, weight: .medium)).foregroundColor(.orange)
-                    Text("No timer available").font(.system(size: 15, weight: .medium))
-                    Text("Manage native timers in the About → Configure.")
+                    Text(manager.hasAccessibilityAccess && manager.enabled ? "Waiting for Apple Clock" : "Clock isn’t connected").font(.system(size: 15, weight: .medium))
+                    Text(manager.hasAccessibilityAccess && manager.enabled ? "Open Clock’s Timers view to reconnect." : "Check Clock access in About → Configure.")
                         .font(.system(size: 11)).foregroundColor(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -42,6 +42,7 @@ struct NativeClockView: View {
             }
         }
         .padding(.horizontal, 22).padding(.vertical, 8)
+        .onAppear { manager.refresh() }
         .alert(item: $cancelling) { timer in
             Alert(title: Text("Cancel this timer in Apple Clock?"),
                   primaryButton: .destructive(Text("Cancel Timer")) { manager.control(.cancel, timer: timer) },

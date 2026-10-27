@@ -1,9 +1,19 @@
-# Preview 1.6 (build 17) — sports stays in the main island
+# Preview 1.6 (build 18) — Clock recovery and visible pill boundaries
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 17 sports remains large (current)
+## Build 18 Clock recovery and pill boundaries (current)
+
+Native Clock discovery now recognizes active/paused UUID sidebar cards even when Cancel is in a separate detail pane. Observation does not grant control: native actions still require a fresh, unambiguous identity and button association. Wrapped selected cards are supported, button text is chosen from semantic labels instead of numeric AX values, and bounded AX reads batch attributes to reduce round trips. Failed reads retain the last timer read-only for less than ten seconds; a successful empty snapshot clears it immediately. Retry delays back off to 30 seconds, and opening Clock content requests a fresh observation. Permission/configuration and empty observation messages are distinguished.
+
+The main island and companion pills have a subtle static outline, brighter with Increase Contrast. Sports remains large; media and a detected native timer provide the other two slots. No hover, additional animation loop, or in-app timer is added.
+
+Clock compatibility is still experimental. Local fixtures verify the fixes; live Clock inspection was unavailable because computer-use capture failed and the diagnostic process did not have Accessibility trust. The user's installed app may have separate permissions. A visible Settings toggle alone cannot prove that the newly installed executable has access. This build is ad hoc signed, not notarized or Developer ID signed.
+
+Apple/Google Maps and iPhone Live Activities are not imported into this app. See [MAPS-AND-LIVE-ACTIVITIES.md](MAPS-AND-LIVE-ACTIVITIES.md) for verified system support, setup and integration limits. No simulated navigation is advertised as live. Version 1.6.0, bundle/About build 18.
+
+## Build 17 sports remains large (retained)
 
 Sports never occupies a small pill. With a selected sport, the main island keeps the full-size score; media and native Clock use the companion pills. Opening either control panel returns to the large score when collapsed. Compact sideways swipes browse sports/Calendar without promoting media or Clock; expanded swipes still access all pages. Hold-and-swipe still merges/restores the companion pills. With no sport selected, media/Clock may use the main island. Approvals remain temporary main-island attention updates, without consuming a split slot or moving sports into a pill. No hover or additional background work is introduced. Version 1.6.0, bundle/About build 17.
 

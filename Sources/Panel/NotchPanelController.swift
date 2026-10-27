@@ -306,6 +306,7 @@ final class NotchPanelController {
 }
 
 struct SecondaryActivityView: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     @ObservedObject var dataManager: SportsDataManager
     @ObservedObject var media: NowPlayingManager
     @ObservedObject var clock: NativeClockManager
@@ -340,6 +341,7 @@ struct SecondaryActivityView: View {
         .buttonStyle(.plain)
         .modifier(IslandSwipeGesture(presentation: presentation, pullDownActivity: activity, inwardSwipe: (third ? presentation.tertiaryOnLeft : presentation.secondaryOnLeft) ? 1 : -1))
         .background(Capsule().fill(Color.black))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(contrast == .increased ? 0.55 : 0.20), lineWidth: 0.75).allowsHitTesting(false))
         .clipShape(Capsule())
         .accessibilityLabel("Open \(activity?.rawValue ?? "activity") activity")
         .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : "")

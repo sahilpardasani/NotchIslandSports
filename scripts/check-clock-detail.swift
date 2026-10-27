@@ -49,6 +49,37 @@ import IslandCore
         check(ClockTimerParser.selectedDetail(root(card, panel)) == nil, "Larger running drift rejected")
         let replacement = ObservedClockTimer(id: "replacement", remaining: 197, paused: true, controlIdentifier: "selected-detail/replacement")
         check(!ClockControlPolicy.accepts(previous: match.timer, current: replacement, age: 0, command: .resume), "Selection changes reject old click")
+        // Sidebar observation must not require Cancel in the same card, or a
+        // selected flag. Current Clock shows that control in the separate pane.
+        card = selected; card.selected = false
+        let sidebarOnly = ClockAXNode(role: "AXApplication", children: [.init(role: "AXWindow", children: [card])])
+        let observed = ClockTimerParser.parse(sidebarOnly)
+        check(observed.count == 1 && observed[0].paused && observed[0].remaining == 197 && !observed[0].canControl, "Paused sidebar timer stays visible without claiming controls")
+        card.children[1].text = "Pause timer"
+        check(ClockTimerParser.parse(root(card, .init(role: "AXGroup"))).first?.paused == false, "Running sidebar label variant")
+        card.children[1].text = "Start"
+        check(ClockTimerParser.parse(root(card, .init(role: "AXGroup"))).isEmpty, "Recent Start preset never creates an activity")
+        card = selected; card.selected = false
+        var second = card; second.identifier = "00000000-0000-0000-0000-000000000002"; second.children[0].identifier = second.identifier
+        check(ClockTimerParser.parse(root(card, .init(role: "AXGroup"), extra: [second])).count == 2, "Multiple paused sidebar timers retain distinct identities")
+        card = selected; card.children = [.init(role: "AXGroup", children: card.children)]
+        panel = detail; panel.children = [.init(role: "AXGroup", children: panel.children)]
+        check(ClockTimerParser.selectedDetail(root(card, panel))?.timer.id == id, "Wrapper groups retain exact selected-detail binding")
+        check(ClockTimerParser.parse(root(card, panel)).count == 1, "Wrapped selected detail does not duplicate sidebar timer")
+        var cache = ClockObservationCache()
+        let now = Date(timeIntervalSince1970: 100)
+        cache.update([match.timer], now: now)
+        cache.update(nil, now: now.addingTimeInterval(2))
+        check(cache.timers.count == 1 && !cache.timers[0].canControl, "Failed read keeps a brief read-only timer instead of collapsing split")
+        check(cache.remainingLifetime(at: now.addingTimeInterval(2)) == 8, "Retry is bounded by remaining stale-display lifetime")
+        cache.update(nil, now: now.addingTimeInterval(10))
+        check(cache.timers.isEmpty, "Stale timer expires after ten seconds")
+        cache.update([match.timer], now: now)
+        cache.update([], now: now.addingTimeInterval(1))
+        check(cache.timers.isEmpty, "Complete empty snapshot immediately removes ended timer")
+        cache.update([match.timer], now: now)
+        cache.update(nil, now: now.addingTimeInterval(-1))
+        check(cache.timers.isEmpty, "Clock rollback never preserves stale controls")
         print("Passed \(count) selected native Clock detail checks; no live timer action was performed.")
     }
 }

@@ -26,21 +26,34 @@ public struct ObservedClockTimer: Equatable, Identifiable, Sendable {
 public enum ClockTimerParser {
     /// Conservative English UI prototype. Never parse clocks/stopwatches or presets as live timers.
     public static func parse(_ root: ClockAXNode) -> [ObservedClockTimer] {
-        if let detail = selectedDetail(root) { return [detail.timer] }
+        let selected = selectedDetail(root)
         var results: [ObservedClockTimer] = []
         func visit(_ node: ClockAXNode, path: String, depth: Int) {
-            guard depth < 12 else { return }
+            guard depth < 20 else { return }
             // Prefer the smallest recognizable card, never an application/window-wide action target.
             let priorCount = results.count
             for (index, child) in node.children.enumerated() { visit(child, path: "\(path).\(index)", depth: depth + 1) }
             if results.count > priorCount { return }
             // A timer card must contain an unambiguous pause/resume control AND cancel.
-            let descendants = flatten(node, depth: 3)
+            guard ["AXGroup", "AXLayoutItem", "AXRow"].contains(node.role) else { return }
+            let descendants = flatten(node, depth: 5)
             let buttons = descendants.filter { $0.role == "AXButton" }.map { $0.text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
             let hasPause = buttons.contains("pause") || buttons.contains("pause timer")
             let hasResume = buttons.contains("resume") || buttons.contains("resume timer")
             let hasCancel = buttons.contains("cancel") || buttons.contains("cancel timer")
-            let times = descendants.filter { $0.role == "AXStaticText" }.compactMap { duration($0.text) }
+            let times = Array(Set(descendants.filter { $0.role == "AXStaticText" }.compactMap { duration($0.text) }))
+            // Current Clock places active/paused timers in UUID sidebar cards,
+            // while Cancel lives in a separate detail pane. Recent Start presets
+            // must never create a live activity. Observing a card grants no control.
+            if UUID(uuidString: node.identifier) != nil, hasPause != hasResume {
+                let summaries = descendants.filter { $0.role == "AXStaticText" }
+                    .compactMap { summaryDuration($0.text) }
+                let distinct = Set(summaries)
+                if distinct.count == 1, let remaining = distinct.first {
+                    results.append(.init(id: node.identifier, remaining: remaining, paused: hasResume))
+                    return
+                }
+            }
             if hasCancel, hasPause != hasResume, times.count == 1 {
                 results.append(.init(id: node.identifier.isEmpty ? path : node.identifier,
                                      remaining: times[0], paused: hasResume,
@@ -49,6 +62,11 @@ public enum ClockTimerParser {
             }
         }
         visit(root, path: "clock", depth: 0)
+        if let selected {
+            results.removeAll { $0.id == selected.timer.id || $0.id == selected.detailPath }
+            // The selected detail and its sidebar summary represent one timer.
+            results.insert(selected.timer, at: 0)
+        }
         // Ambiguous duplicate identifiers must not become duplicate SwiftUI identities.
         let counts = Dictionary(grouping: results, by: \.id).mapValues(\.count)
         var seen = Set<String>()
@@ -65,7 +83,7 @@ public enum ClockTimerParser {
         for (windowIndex, window) in root.children.enumerated() where window.role == "AXWindow" {
             var nodes: [(ClockAXNode, String)] = []
             func walk(_ node: ClockAXNode, _ path: String, _ depth: Int) {
-                guard depth < 12 else { return }
+                guard depth < 20 else { return }
                 nodes.append((node, path))
                 for (index, child) in node.children.enumerated() { walk(child, "\(path).\(index)", depth + 1) }
             }
@@ -75,27 +93,41 @@ public enum ClockTimerParser {
             }
             guard selected.count == 1 else { continue }
             let (card, selectionPath) = selected[0]
-            let summaries = card.children.filter { $0.role == "AXStaticText" && $0.identifier == card.identifier }
-            let states = card.children.filter { $0.role == "AXButton" }.map { $0.text.lowercased() }
+            let cardNodes = flatten(card, depth: 5)
+            let summaries = cardNodes.filter { $0.role == "AXStaticText" && $0.identifier == card.identifier }
+            let states = cardNodes.filter { $0.role == "AXButton" }.map { normalizedAction($0.text) }
             guard summaries.count == 1, states.count == 1, ["pause", "resume"].contains(states[0]),
-                  let first = summaries[0].text.split(separator: ",", maxSplits: 1).first,
-                  let remaining = duration(String(first)) else { continue }
+                  let remaining = summaryDuration(summaries[0].text) else { continue }
             let paused = states[0] == "resume"
-            let details = nodes.compactMap { node, path -> (String, TimeInterval)? in
+            let candidates = nodes.compactMap { node, path -> (String, TimeInterval)? in
                 guard ["AXGroup", "AXLayoutItem"].contains(node.role) else { return nil }
-                let buttons = node.children.filter { $0.role == "AXButton" }
-                let cancel = buttons.filter { $0.identifier == "CancelButton" && $0.text.lowercased() == "cancel" }
-                let toggle = buttons.filter { $0.identifier == "PauseResumeButton" && $0.text.lowercased() == states[0] }
-                let times = node.children.filter { $0.role == "AXStaticText" }.compactMap { duration($0.text) }
+                let detailNodes = flatten(node, depth: 5)
+                let buttons = detailNodes.filter { $0.role == "AXButton" }
+                let cancel = buttons.filter { $0.identifier == "CancelButton" && normalizedAction($0.text) == "cancel" }
+                let toggle = buttons.filter { $0.identifier == "PauseResumeButton" && normalizedAction($0.text) == states[0] }
+                let times = Array(Set(detailNodes.filter { $0.role == "AXStaticText" }.compactMap { duration($0.text) }))
                 guard cancel.count == 1, toggle.count == 1, buttons.count == 2, times.count == 1,
                       abs(times[0] - remaining) <= (paused ? 0 : 1) else { return nil }
                 return (path, times[0])
+            }
+            let details = candidates.filter { candidate in
+                !candidates.contains { $0.0.hasPrefix(candidate.0 + ".") }
             }
             guard details.count == 1 else { continue }
             matches.append(.init(timer: .init(id: card.identifier, remaining: details[0].1, paused: paused,
                 controlIdentifier: "selected-detail/" + card.identifier), detailPath: details[0].0, selectionPath: selectionPath))
         }
         return matches.count == 1 ? matches[0] : nil
+    }
+
+    public static func normalizedAction(_ text: String) -> String {
+        let value = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        return ["pause timer": "pause", "resume timer": "resume", "cancel timer": "cancel"][value] ?? value
+    }
+
+    private static func summaryDuration(_ text: String) -> TimeInterval? {
+        guard let first = text.split(separator: ",", maxSplits: 1).first else { return nil }
+        return duration(String(first))
     }
 
     public static func duration(_ text: String) -> TimeInterval? {
@@ -130,5 +162,24 @@ public enum ClockControlPolicy {
         let drift = previous.remaining - current.remaining
         guard drift >= -1, drift <= (previous.paused ? 1 : age + 2) else { return false }
         return command == .cancel || (command == .pause && !current.paused) || (command == .resume && current.paused)
+    }
+}
+
+/// A failed/partial AX read is different from a successful empty Timers page.
+/// Brief failures retain a read-only display; stale controls are never retained.
+public struct ClockObservationCache: Sendable {
+    public private(set) var timers: [ObservedClockTimer] = []
+    private var lastSuccess: Date?
+    public init() {}
+    public func remainingLifetime(at now: Date) -> TimeInterval {
+        guard !timers.isEmpty, let lastSuccess else { return 0 }
+        return max(0, 10 - now.timeIntervalSince(lastSuccess))
+    }
+    public mutating func update(_ snapshot: [ObservedClockTimer]?, now: Date) {
+        if let snapshot { timers = snapshot; lastSuccess = now; return }
+        guard let lastSuccess, (0..<10).contains(now.timeIntervalSince(lastSuccess)) else {
+            timers = []; return
+        }
+        timers = timers.map { .init(id: $0.id, remaining: $0.remaining, paused: $0.paused) }
     }
 }

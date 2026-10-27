@@ -93,6 +93,7 @@ struct NotchContentView: View {
     @ObservedObject var approvals: ApprovalManager
     @ObservedObject var presentation: IslandPresentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         GeometryReader { geometry in
@@ -124,7 +125,7 @@ struct NotchContentView: View {
         }
         .frame(width: size.width, height: size.height, alignment: .top)
         .background(shape.fill(Color.black))
-        .overlay(shape.stroke(Color.white.opacity(presentation.expanded ? 0.10 : 0), lineWidth: 0.5)
+        .overlay(shape.stroke(Color.white.opacity(contrast == .increased ? 0.55 : 0.20), lineWidth: 1)
             .allowsHitTesting(false))
         .clipShape(shape)
         .foregroundColor(.white)

@@ -37,6 +37,8 @@ final class NativeClockManager: ObservableObject {
     private let reader = ClockAccessibilityReader()
     private var poll: Timer?
     private var lastTrusted = AXIsProcessTrusted()
+    private var readFailures = 0
+    private var observationCache = ClockObservationCache()
     private var reading = false
     private var running = false
     private var lowPower = false
@@ -150,6 +152,7 @@ final class NativeClockManager: ObservableObject {
         reading = false
         controlBusy = false
         timers = []
+        observationCache = ClockObservationCache()
         observedAt = nil
         status = enabled ? "Clock observation paused" : "Native Clock observation is off"
     }
@@ -165,6 +168,7 @@ final class NativeClockManager: ObservableObject {
         generation += 1
         controlBusy = false
         poll?.invalidate(); poll = nil
+        observationCache = ClockObservationCache()
         if !timers.isEmpty { timers = [] }
         observedAt = nil
         if status != message { status = message }
@@ -198,21 +202,27 @@ final class NativeClockManager: ObservableObject {
             Task { @MainActor in
                 guard let self, self.running, self.enabled, token == self.generation else { return }
                 self.reading = false
-                let next = snapshot ?? []
+                self.readFailures = snapshot == nil ? min(4, self.readFailures + 1) : 0
+                self.observationCache.update(snapshot, now: Date())
+                let next = self.observationCache.timers
                 if self.timers != next { self.timers = next }
                 if !self.timers.isEmpty && !self.setupValidated {
                     self.setupValidated = true; self.setupFailure = nil
                     self.defaults.set(true, forKey: "NativeClockConfigured")
                 }
-                self.observedAt = self.timers.isEmpty ? nil : Date()
-                let status = self.timers.isEmpty
+                self.observedAt = snapshot == nil || self.timers.isEmpty ? nil : Date()
+                let status = snapshot == nil ? "Clock could not be read. Retrying; native controls are disabled until a fresh observation." : self.timers.isEmpty
                     ? "No readable timers. Keep Clock’s Timers view open. This experimental adapter currently recognizes English timer controls."
                     : "Observed in Apple Clock"
                 if self.status != status { self.status = status }
                 if let interval = EnergyPolicy.clockInterval(trusted: true, appRunning: true,
                     setupVisible: self.setupVisible, hasTimers: !self.timers.isEmpty,
                     runningTimer: self.timers.contains(where: { !$0.paused }), lowPower: self.lowPower) {
-                    self.schedule(after: interval)
+                    var delay = snapshot == nil ? min(30, pow(2, Double(self.readFailures)) * (self.lowPower ? 4 : 2)) : interval
+                    if snapshot == nil && !next.isEmpty {
+                        delay = min(delay, max(0.1, self.observationCache.remainingLifetime(at: Date())))
+                    }
+                    self.schedule(after: delay, toleranceFraction: snapshot == nil ? 0 : 0.2)
                 }
             }
         }
@@ -242,13 +252,13 @@ final class NativeClockManager: ObservableObject {
         }
     }
 
-    private func schedule(after interval: TimeInterval) {
+    private func schedule(after interval: TimeInterval, toleranceFraction: Double = 0.2) {
         guard running, enabled else { return }
         poll?.invalidate()
         poll = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
-        poll?.tolerance = interval * 0.2
+        poll?.tolerance = interval * toleranceFraction
     }
 }
 
@@ -259,6 +269,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
     private var observer: AXObserver?
     private var application: AXUIElement?
     private var processID: pid_t?
+    private var observedWindows: [AXUIElement] = []
     private var lastSignal = Date.distantPast
     private var hasTimers = false
     private var cards: [String: [AXUIElement]] = [:]
@@ -275,6 +286,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
     private func removeObserver() {
         if let observer { CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes) }
         observer = nil; application = nil; processID = nil
+        observedWindows = []
     }
 
     /// Bounded, uniquely matched native tab selection; never starts or edits a timer.
@@ -320,7 +332,6 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
 
     func read(pid: pid_t, completion: @escaping ([ObservedClockTimer]?) -> Void) {
         queue.async {
-            self.hasTimers = false
             self.cards = [:]; self.snapshotElements = [:]; self.selectedAnchors = [:]
             if self.processID != pid {
                 self.removeObserver()
@@ -345,7 +356,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                 if AXObserverCreate(pid, callback, &observer) == .success, let observer {
                     self.observer = observer
                     for name in [kAXWindowCreatedNotification, kAXUIElementDestroyedNotification,
-                                 kAXFocusedUIElementChangedNotification, kAXValueChangedNotification] {
+                                 kAXFocusedUIElementChangedNotification, kAXFocusedWindowChangedNotification, kAXLayoutChangedNotification, kAXValueChangedNotification] {
                         _ = AXObserverAddNotification(observer, app, name as CFString,
                             Unmanaged.passUnretained(self).toOpaque())
                     }
@@ -358,8 +369,23 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
             var windows: CFTypeRef?
             guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows) == .success,
                   let elements = windows as? [AXUIElement], !elements.isEmpty else { completion(nil); return }
-            var budget = 200
-            let deadline = Date().addingTimeInterval(0.8)
+            if let observer = self.observer {
+                let windows = Array(elements.prefix(2))
+                if windows.count != self.observedWindows.count || !zip(windows, self.observedWindows).allSatisfy({ CFEqual($0, $1) }) {
+                    let notifications = [kAXLayoutChangedNotification, kAXSelectedChildrenChangedNotification, kAXValueChangedNotification]
+                    for window in self.observedWindows {
+                        for name in notifications { AXObserverRemoveNotification(observer, window, name as CFString) }
+                    }
+                    self.observedWindows = windows
+                    for window in windows {
+                        for name in notifications {
+                            AXObserverAddNotification(observer, window, name as CFString, Unmanaged.passUnretained(self).toOpaque())
+                        }
+                    }
+                }
+            }
+            var budget = 500
+            let deadline = Date().addingTimeInterval(1.2)
             var exhausted = elements.count > 2
             let children = elements.prefix(2).enumerated().compactMap { windowIndex, window -> ClockAXNode? in
                 return self.node(window, path: "clock.\(windowIndex)", depth: 0, budget: &budget, deadline: deadline, exhausted: &exhausted)
@@ -423,7 +449,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
         let deadline = Date().addingTimeInterval(0.25)
         var complete = true
         func visit(_ element: AXUIElement, depth: Int) {
-            guard depth <= 3, budget > 0, Date() < deadline else { complete = false; return }
+            guard depth <= 5, budget > 0, Date() < deadline else { complete = false; return }
             budget -= 1
             func value(_ key: String) -> CFTypeRef? {
                 var result: CFTypeRef?
@@ -432,7 +458,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
             }
             if value(kAXRoleAttribute) as? String == "AXButton" {
                 let label = ([kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute]
-                    .compactMap { value($0) as? String }.first { !$0.isEmpty } ?? "")
+                    .compactMap { value($0) as? String }.first { NativeClockCommand.allLabels[$0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)] != nil } ?? "")
                     .lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 let command = NativeClockCommand.allLabels[label]
                 var actions: CFArray?
@@ -443,7 +469,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                 }
             }
             let children = value(kAXChildrenAttribute) as? [AXUIElement] ?? []
-            if depth == 3 { if !children.isEmpty { complete = false }; return }
+            if depth == 5 { if !children.isEmpty { complete = false }; return }
             for child in children { visit(child, depth: depth + 1) }
         }
         visit(card, depth: 0)
@@ -453,23 +479,37 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
 
     private func node(_ element: AXUIElement, path: String, depth: Int, budget: inout Int,
                       deadline: Date, exhausted: inout Bool) -> ClockAXNode? {
-        guard depth < 12, budget > 0, Date() < deadline else { exhausted = true; return nil }
+        guard depth < 20, budget > 0, Date() < deadline else { exhausted = true; return nil }
         budget -= 1
-        func attribute(_ name: String) -> CFTypeRef? {
-            var result: CFTypeRef?
-            _ = AXUIElementCopyAttributeValue(element, name as CFString, &result)
-            return result
+        let keys = [kAXRoleAttribute, kAXIdentifierAttribute, kAXSelectedAttribute,
+                    kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXChildrenAttribute]
+        var raw: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(element, keys as CFArray, [], &raw) == .success,
+              let values = raw as? [Any], values.count == keys.count else {
+            exhausted = true; return nil
         }
-        let role = attribute(kAXRoleAttribute) as? String ?? ""
+        func attribute(_ key: String) -> Any? { keys.firstIndex(of: key).map { values[$0] } }
+        guard let role = attribute(kAXRoleAttribute) as? String, !role.isEmpty else {
+            exhausted = true; return nil
+        }
         let identifier = attribute(kAXIdentifierAttribute) as? String ?? ""
         snapshotElements[path] = element
         if !identifier.isEmpty, ["AXGroup", "AXLayoutItem"].contains(role) { cards[identifier, default: []].append(element) }
         let selected = UUID(uuidString: identifier) != nil && ["AXGroup", "AXLayoutItem"].contains(role)
             ? (attribute(kAXSelectedAttribute) as? Bool ?? false) : false
-        let value = attribute(kAXValueAttribute) as? String
-        let title = attribute(kAXTitleAttribute) as? String
-        let description = attribute(kAXDescriptionAttribute) as? String
-        let text = [value, title, description].compactMap { $0 }.first(where: { !$0.isEmpty }) ?? ""
+        let texts = [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute]
+            .compactMap { attribute($0) as? String }.filter { !$0.isEmpty }
+        // A button's value can be "0" while its title/description says Resume.
+        let action = texts.first { ["pause", "resume", "cancel"].contains(ClockTimerParser.normalizedAction($0)) }
+        let text = (role == "AXButton" ? action : nil) ?? texts.first ?? ""
+        if let rawChildren = attribute(kAXChildrenAttribute), CFGetTypeID(rawChildren as CFTypeRef) == AXValueGetTypeID() {
+            let value = rawChildren as! AXValue
+            var error = AXError.success
+            if AXValueGetType(value) == .axError, AXValueGetValue(value, .axError, &error),
+               error != .success && error != .attributeUnsupported && error != .noValue {
+                exhausted = true; return nil
+            }
+        }
         let children = attribute(kAXChildrenAttribute) as? [AXUIElement] ?? []
         if children.count > 80 { exhausted = true }
         return ClockAXNode(role: role, identifier: identifier, text: String(text.prefix(128)),
