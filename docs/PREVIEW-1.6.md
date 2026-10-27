@@ -1,9 +1,13 @@
-# Preview 1.6 (build 13) — faster media and concise approvals
+# Preview 1.6 (build 14) — faster media and concise approvals
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 13 media and approval follow-up (current)
+## Build 14 clean action labels (current)
+
+ChatGPT requests now describe the requested action instead of showing internal tool names. For example, a GitHub tree request displays “Prepare 20 file changes · sahilpardasani/NotchIslandSports”. Commit, branch update, force-update and pull-request actions have distinct labels. Unknown integrations retain their service/operation with technical separators removed. The one-line layout and on-demand full Details remain. The user’s screenshot confirms a real Codex request reached the earlier UI; response round-trip and source-to-screen latency are still unmeasured. Version is 1.6.0, bundle/About build 14.
+
+## Build 13 media and approval follow-up retained
 
 The media adapter accepts system-reported playback before its title arrives, displaying “Playing media” until metadata appears. This removes the title gate without inventing a video title, scanning tabs or reading browsing history. Untitled media controls stay disabled until exact source/title validation is possible. The same feed accepts TV, Podcasts, streaming apps and browsers; it has no Music/Spotify-only whitelist. Netflix, Prime Video and private windows work only when their player exposes system Now Playing state. Private/DRM content that withholds that state cannot be detected through this integration. Live compatibility with those apps has not been verified.
 

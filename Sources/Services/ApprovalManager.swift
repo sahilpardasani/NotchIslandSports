@@ -86,11 +86,18 @@ import IslandCore
         } catch { status = "Could not connect. Existing settings were preserved where possible. See the approval setup guide." }
     }
     #if DEBUG
-    static func visualFixture() -> ApprovalManager {
+    static func visualFixture(github: Bool = false) -> ApprovalManager {
         let manager = ApprovalManager()
-        let packet: [String: Any] = ["version": 1, "id": UUID().uuidString, "provider": "claude-code", "token": String(repeating: "x", count: 64), "created": Date().timeIntervalSince1970,
+        let packet: [String: Any] = ["version": 1, "id": UUID().uuidString, "provider": github ? "codex" : "claude-code", "token": String(repeating: "x", count: 64), "created": Date().timeIntervalSince1970,
             "hook": ["hook_event_name": "PermissionRequest", "session_id": "synthetic-preview", "cwd": "/example/project", "tool_name": "Bash", "tool_input": ["command": "npm test", "description": "Run the project's test suite"]]]
-        manager.requests = [ApprovalRequest.decode(try! JSONSerialization.data(withJSONObject: packet), secret: String(repeating: "x", count: 64))!]
+        var fixture = packet
+        if github {
+            fixture["hook"] = ["hook_event_name": "PermissionRequest", "session_id": "synthetic-preview", "cwd": "/example/project",
+                "tool_name": "mcp__codex_apps__github_create_tree",
+                "tool_input": ["repository_full_name": "sahilpardasani/NotchIslandSports",
+                               "tree_elements": (1...20).map { ["path": "Sources/File\($0).swift", "content": "synthetic fixture"] }]]
+        }
+        manager.requests = [ApprovalRequest.decode(try! JSONSerialization.data(withJSONObject: fixture), secret: String(repeating: "x", count: 64))!]
         return manager
     }
     #endif

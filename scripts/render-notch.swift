@@ -22,7 +22,7 @@ import IslandCore
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
-                                  ("notch-approval-expanded", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+                                  ("notch-approval-expanded", .approval), ("notch-chatgpt-approval", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
             if name == "notch-artwork-pill" {
                 let cover = NSImage(size: NSSize(width: 96, height: 96))
                 cover.lockFocus()
@@ -73,14 +73,14 @@ import IslandCore
                 Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
                     .padding(.top, canvasHeight - 30).padding(.leading, 28)
                 NotchContentView( dataManager: data, nowPlayingManager: media,
-                    clockManager: clock, calendarManager: calendar, approvals: ApprovalManager.visualFixture(), presentation: presentation)
+                    clockManager: clock, calendarManager: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"), presentation: presentation)
                     .frame(width: primary.width, height: primary.height)
                     .position(x: primary.midX, y: screen.maxY - primary.midY)
-                if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(),
+                if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"),
                     presentation: presentation, third: false)
                     .frame(width: secondary.width, height: secondary.height)
                     .position(x: secondary.midX, y: screen.maxY - secondary.midY) }
-                if presentation.showsTertiary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(),
+                if presentation.showsTertiary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"),
                     presentation: presentation, third: true)
                     .frame(width: tertiary.width, height: tertiary.height)
                     .position(x: tertiary.midX, y: screen.maxY - tertiary.midY) }

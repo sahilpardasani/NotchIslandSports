@@ -116,6 +116,30 @@ public enum ApprovalSummary {
             }.map { $0.replacingOccurrences(of: "*** ", with: "") }
             if !paths.isEmpty { return clean(paths.joined(separator: "; ")) }
         }
+        let normalized = tool.replacingOccurrences(of: "mcp__codex_apps__", with: "")
+            .replacingOccurrences(of: "mcp__github__", with: "github_")
+        let repository = (fields["repository_full_name"] ?? fields["repo_full_name"]) as? String
+        let target = repository.map { " · " + $0 } ?? ""
+        switch normalized {
+        case "github_create_tree":
+            let count = (fields["tree_elements"] as? [Any])?.count
+            return clean(count.map { "Prepare \($0) file changes" } ?? "Prepare file changes") + clean(target)
+        case "github_create_commit": return clean("Create a commit" + target)
+        case "github_update_ref":
+            let branch = fields["branch_name"] as? String ?? "branch"
+            let verb = fields["force"] as? Bool == true ? "Force-update " : "Update "
+            return clean(verb + branch + target)
+        case "github_create_pull_request": return clean("Open a pull request" + target)
+        default: break
+        }
+        if tool.hasPrefix("mcp__") {
+            // Preserve the service and operation, but remove machine-only separators.
+            // Unknown operations are not guessed to be read-only or harmless.
+            let segments = tool.components(separatedBy: "__").dropFirst()
+                .filter { $0 != "codex_apps" && $0 != "codex_app" }
+            let words = segments.joined(separator: " ").replacingOccurrences(of: "_", with: " ")
+            return clean(words.prefix(1).uppercased() + words.dropFirst())
+        }
         return "Use " + clean(tool)
     }
 }
