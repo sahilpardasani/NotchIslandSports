@@ -1,46 +1,20 @@
 import SwiftUI
+import IslandCore
 
 struct CollapsedScoreView: View {
     @ObservedObject var dataManager: SportsDataManager
     @State private var isPulsing = false
     
     var body: some View {
-        HStack(alignment: .center) {
-            if let currentMatch = dataManager.activeMatch {
-                // Left side
-                leftSideView(for: currentMatch)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Middle spacer representing the notch (or standard gap)
-                Spacer()
-                    .frame(width: dataManager.hasNotch ? min(dataManager.notchWidth + 16, 170) : 60)
-                
-                // Right side
-                rightSideView(for: currentMatch)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                // No active matches split fallback
-                HStack(spacing: 4) {
-                    Text("📺")
-                    Text("No Active Matches")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
-                    .frame(width: dataManager.hasNotch ? min(dataManager.notchWidth + 16, 170) : 60)
-                
-                Text("NotchIsland")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.3))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+        NotchEars(gap: dataManager.hasNotch ? dataManager.notchWidth + 12 : 20) {
+            if let match = dataManager.activeMatch { leftSideView(for: match) }
+            else { Text("No active match").font(.system(size: 11)).foregroundColor(.gray) }
+        } right: {
+            if let match = dataManager.activeMatch { rightSideView(for: match) }
+            else { Text("NotchIsland").font(.system(size: 11)).foregroundColor(.gray) }
         }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     // MARK: - Side View Routers
     
     @ViewBuilder
@@ -156,7 +130,7 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
@@ -221,46 +195,29 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
             }
             
-            Text("🏏")
-            
-            Text(match.awayTeamAbbrev)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+            // Fit the team and multi-innings score together instead of truncating the
+            // abbreviation first when the camera leaves a narrow ear.
+            (Text("🏏 " + match.awayTeamAbbrev + " ")
                 .foregroundColor(.white)
-                .lineLimit(1)
-                .layoutPriority(1)
-            
-            let oversSuffix: String = {
-                if let maxO = getMaxOvers(for: match) {
-                    return getOversText(for: match.awayTeamAbbrev, match: match, maxOvers: maxO)
-                }
-                return ""
-            }()
-            
-            Text("\(cleanScore(match.awayScore))\(oversSuffix)")
+             + Text(CompactActivityText.score(match.awayScore))
+                .foregroundColor(isWinner(match: .cricket(match), isHome: false) ? Color(hex: "E6FF00") : .white))
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(isWinner(match: .cricket(match), isHome: false) ? Color(hex: "E6FF00") : .white)
                 .lineLimit(1)
-                .layoutPriority(2)
+                .minimumScaleFactor(0.75)
+
         }
     }
     
     @ViewBuilder
     private func cricketRightSide(_ match: CricketMatch) -> some View {
         HStack(spacing: 6) {
-            let oversSuffix: String = {
-                if let maxO = getMaxOvers(for: match) {
-                    return getOversText(for: match.homeTeamAbbrev, match: match, maxOvers: maxO)
-                }
-                return ""
-            }()
-            
-            Text("\(cleanScore(match.homeScore))\(oversSuffix)")
+            Text(CompactActivityText.score(match.homeScore))
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundColor(isWinner(match: .cricket(match), isHome: true) ? Color(hex: "E6FF00") : .white)
                 .lineLimit(1)
@@ -287,64 +244,6 @@ struct CollapsedScoreView: View {
         }
     }
     
-    private func getMaxOvers(for match: CricketMatch) -> Int? {
-        let text = (match.matchDescription + " " + match.statusText).lowercased()
-        if text.contains("t20") || text.contains("ipl") || text.contains("t-20") || text.contains("bbl") || text.contains("psl") || text.contains("cpl") || text.contains("twenty20") || text.contains("twenty-20") {
-            return 20
-        } else if text.contains("the hundred") || text.contains("hundred") {
-            return 20  // The Hundred uses 100 balls ≈ 20 overs equivalent
-        } else if text.contains("odi") || text.contains("one-day") || text.contains("one day") || text.contains("50 overs") || text.contains("50-over") {
-            return 50
-        } else if text.contains("t10") || text.contains("t-10") || text.contains("10 overs") || text.contains("10-over") {
-            return 10
-        }
-        
-        if let league = match.leagueId?.lowercased() {
-            if league.contains("ipl") || league.contains("t20") || league.contains("bbl") || league.contains("psl") || league.contains("hundred") {
-                return 20
-            }
-        }
-        
-        if text.contains("test") || text.contains("first-class") || text.contains("first class") || text.contains("county") || text.contains("shield") || text.contains("ashes") || text.contains("trophy") {
-            return nil
-        }
-        
-        return nil
-    }
-    
-    private func getOversText(for teamAbbrev: String, match: CricketMatch, maxOvers: Int) -> String {
-        let isHome = teamAbbrev == match.homeTeamAbbrev
-        let score = isHome ? match.homeScore : match.awayScore
-        
-        if score == "–" || score.isEmpty {
-            return ""
-        }
-        
-        let isCurrentlyBatting: Bool
-        if let currentInnings = match.currentInnings {
-            let teamNameLower = currentInnings.teamName.lowercased()
-            let matchAwayLower = match.awayTeam.lowercased()
-            let matchAwayAbbrevLower = match.awayTeamAbbrev.lowercased()
-            let matchHomeLower = match.homeTeam.lowercased()
-            let matchHomeAbbrevLower = match.homeTeamAbbrev.lowercased()
-            
-            if isHome {
-                isCurrentlyBatting = teamNameLower.contains(matchHomeLower) || teamNameLower.contains(matchHomeAbbrevLower)
-            } else {
-                isCurrentlyBatting = teamNameLower.contains(matchAwayLower) || teamNameLower.contains(matchAwayAbbrevLower)
-            }
-        } else {
-            isCurrentlyBatting = false
-        }
-        
-        if isCurrentlyBatting, let currentInnings = match.currentInnings {
-            let formattedOvers = String(format: "%.1f", currentInnings.overs)
-            return " (\(formattedOvers)/\(maxOvers))"
-        } else {
-            return " (\(maxOvers)/\(maxOvers))"
-        }
-    }
-    
     // MARK: - Default Split Views
     
     @ViewBuilder
@@ -358,7 +257,7 @@ struct CollapsedScoreView: View {
                     .scaleEffect(isPulsing ? 1.2 : 0.9)
                     .opacity(isPulsing ? 0.5 : 1.0)
                     .onAppear {
-                        withAnimation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        withAnimation(Animation.easeInOut(duration: 0.8).repeatCount(2, autoreverses: true)) {
                             isPulsing = true
                         }
                     }
@@ -461,3 +360,4 @@ struct CollapsedScoreView: View {
         return false
     }
 }
+

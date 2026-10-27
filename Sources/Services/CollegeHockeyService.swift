@@ -124,7 +124,7 @@ final class CollegeHockeyService {
         let competition = competitions?.first
         let competitors = competition?["competitors"] as? [[String: Any]] ?? []
 
-        let statusDict = header?["status"] as? [String: Any] ?? (json["status"] as? [String: Any] ?? [:])
+        let statusDict = ESPNStatusParser.summaryStatus(competition: competition, event: header, root: json)
         let statusType = statusDict["type"] as? [String: Any]
         let statusState = statusType?["state"] as? String ?? ""
         let statusDescription = statusType?["shortDetail"] as? String
@@ -225,3 +225,4 @@ final class CollegeHockeyService {
         return TeamInfo(name: name, abbreviation: abbreviation, score: score, logoURL: logoURL)
     }
 }
+

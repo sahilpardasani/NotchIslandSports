@@ -38,8 +38,6 @@ struct NotchContentView_Previews: PreviewProvider {
     
     @MainActor
     private static func previewContainer(expanded: Bool, activeSport: SportType) -> some View {
-        let hoverState = HoverState()
-        hoverState.isHovered = expanded
         
         let dataManager = SportsDataManager()
         let mocks = MockDataProvider.getMockMatches()
@@ -50,9 +48,13 @@ struct NotchContentView_Previews: PreviewProvider {
             dataManager.activeMatch = match
         }
         
-        return NotchContentView(hoverState: hoverState, dataManager: dataManager)
+        let presentation = IslandPresentation()
+        presentation.expanded = expanded
+        return NotchContentView( dataManager: dataManager,
+            nowPlayingManager: NowPlayingManager(), clockManager: NativeClockManager(), calendarManager: CalendarManager(), approvals: ApprovalManager(), presentation: presentation)
             .frame(width: expanded ? 400 : 340, height: expanded ? 360 : 36)
             .padding()
             .background(Color.black.opacity(0.85))
     }
 }
+

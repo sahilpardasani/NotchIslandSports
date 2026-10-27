@@ -12,25 +12,49 @@ settings:
     ARCHS: "$(ARCHS_STANDARD)"
     VALID_ARCHS: "arm64 x86_64"
     ONLY_ACTIVE_ARCH: NO
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "12.0"
     CODE_SIGN_IDENTITY: "-"
     CODE_SIGN_STYLE: Manual
-    PRODUCT_BUNDLE_IDENTIFIER: com.notchislandsports.app
-    PRODUCT_NAME: NotchIslandSports
-    INFOPLIST_FILE: Sources/App/Info.plist
     COMBINE_HIDPI_IMAGES: YES
-    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
     ENABLE_HARDENED_RUNTIME: NO
 
 targets:
+  IslandCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Core
+    settings:
+      base:
+        PRODUCT_NAME: IslandCore
+        PRODUCT_MODULE_NAME: IslandCore
+        DEFINES_MODULE: YES
+  IslandCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/IslandCoreTests
+    dependencies:
+      - target: IslandCore
+    settings:
+      base:
+        PRODUCT_NAME: IslandCoreTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.notchislandsports.tests
+        GENERATE_INFOPLIST_FILE: YES
   NotchIslandSports:
     type: application
     platform: macOS
+    dependencies:
+      - target: IslandCore
     sources:
       - path: Sources
         type: group
+    postBuildScripts:
+      - name: Build native media adapter
+        script: 'NOTCH_ARCH="$ARCHS" bash "$SRCROOT/scripts/build-media-adapter.sh" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH"'
+        basedOnDependencyAnalysis: false
     resources:
       - path: Resources
         type: group
@@ -39,7 +63,10 @@ targets:
         ARCHS: "$(ARCHS_STANDARD)"
         ONLY_ACTIVE_ARCH: NO
         MACOSX_DEPLOYMENT_TARGET: "12.0"
-        SWIFT_VERSION: "5.9"
+        SWIFT_VERSION: "5.0"
         CODE_SIGN_IDENTITY: "-"
         INFOPLIST_FILE: Sources/App/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.notchislandsports.app
+        PRODUCT_NAME: NotchIslandSports
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+

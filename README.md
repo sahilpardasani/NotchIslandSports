@@ -1,4 +1,13 @@
+> **1.5 preview:** Restored the clean scorecard layout and replaced the tall timer diagnostics panel with a large countdown and circular Pause/Resume/Cancel buttons. [Details, native Clock support and validation](docs/TIMER-UI-RESTORATION.md).
+
+> **1.4 preview:** Up to three live activities; Calendar stays outside the slots and opens by swipe. Hold-and-swipe merges; the menu bar manages widgets/settings. The collapsed strip now fits the camera band, with eased pull-down/collapse transitions. [Current behavior, limits and validation](docs/INTERACTION-UPDATE.md).
+
+> Calendar is read-only and its agenda advances past ended events without changing Apple Calendar. In 1.4 it is a swipe-accessed page, not a split or compact activity.
+
 # 🏟️ NotchIslandSports
+
+> **1.1 preview:** Battery/lifecycle fixes and split sports, music, and **native Apple Clock observation** are implemented on this branch. No in-app timers were added. Native Clock and system media integration are experimental. [Download/build instructions](docs/BUILDING.md) · [Changes and test checklist](docs/IMPLEMENTATION.md). The root ZIP below is still the older build.
+
 
 A premium, native macOS background utility that transforms your MacBook Pro/Air screen notch into a highly fluid, responsive live sports tracking dashboard. 
 
@@ -21,10 +30,10 @@ Stream real-time ball-by-ball sports data and score updates natively right under
 ## 📦 Fast Installation (No Coding Required)
 Download the NotchIslandSports.zip file from the file list above.
 Extract the file and drag NotchIslandSports.app straight into your Applications folder.
-First-Time Activation Bypass: Right-click (Control-click) NotchIslandSports.app and select Open from the menu. When the unverified developer security warning box appears, click Open to authorize your Mac to run the ad-hoc build.
-Clear Quarantine Hold (If Blocked): If macOS treats the bundle as damaged or blocked, pop open your Terminal app and clear the Gatekeeper quarantine flag by running: xattr -cr /Applications/NotchIslandSports.app
+For the updated preview, follow [Download/build instructions](docs/BUILDING.md). Preview builds are ad hoc signed; a Developer ID signed and notarized release is still pending. Follow normal macOS security prompts.
 
-To select match click on the icon in menu bar and select match then hover over the black colored bar and you can choose your matche by clicking it.
+
+To select match click on the icon in menu bar and select match then choose your match. Pull down to open the island and swipe up to collapse it. Hover does nothing.
 <img width="578" height="256" alt="Screenshot 2026-05-26 at 10 42 41 AM" src="https://github.com/user-attachments/assets/a3703b1f-42aa-45de-af90-33c2e06a2c0d" />
 <img width="265" height="250" alt="Screenshot 2026-05-26 at 10 42 16 AM" src="https://github.com/user-attachments/assets/077881cb-0835-4ff2-a973-edae4128ec07" />
 
@@ -53,5 +62,6 @@ This project is licensed under the terms of the MIT License.
 Copyright © 2026 Sahil Pardasani. All rights reserved. 
 
 Contributions, bug fixes, and feature requests for new sports divisions are welcome!
+
 
 

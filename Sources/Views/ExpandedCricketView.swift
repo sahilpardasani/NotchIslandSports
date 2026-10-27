@@ -2,7 +2,7 @@
 // NotchIslandSports
 //
 // Rich cricket scorecard showing batting, bowling, partnership,
-// run rates, and match description in a compact, information-dense layout.
+// and run rates in a compact, information-dense layout.
 
 import SwiftUI
 
@@ -161,7 +161,7 @@ struct ExpandedCricketView: View {
             .onAppear {
                 withAnimation(
                     .easeInOut(duration: 0.8)
-                    .repeatForever(autoreverses: true)
+                    .repeatCount(2, autoreverses: true)
                 ) {
                     isBlinking = true
                 }
@@ -196,11 +196,7 @@ struct ExpandedCricketView: View {
                     
                     languageToggleButton
                 }
-                
-                // Match Description
-                if !match.matchDescription.isEmpty {
-                    matchDescriptionBanner(match.matchDescription)
-                }
+
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -221,6 +217,7 @@ struct ExpandedCricketView: View {
                     
                     HStack(spacing: 4) {
                         Text(HindiTranslator.translate(match.homeScore, isHindi: isHindi))
+                            .lineLimit(1).minimumScaleFactor(0.7)
                             .font(.system(.title3, design: .monospaced).weight(.bold))
                             .foregroundColor(DesignSystem.primaryText)
                         
@@ -252,6 +249,7 @@ struct ExpandedCricketView: View {
                         .lineLimit(1)
                     
                     Text(HindiTranslator.translate(match.awayScore, isHindi: isHindi))
+                        .lineLimit(1).minimumScaleFactor(0.65)
                         .font(.system(.title3, design: .monospaced).weight(.bold))
                         .foregroundColor(DesignSystem.primaryText)
                 }
@@ -512,28 +510,6 @@ struct ExpandedCricketView: View {
         .buttonStyle(.plain)
     }
     
-    // MARK: - Match Description
-    
-    private func matchDescriptionBanner(_ text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: 10))
-                .foregroundColor(DesignSystem.cricketGreen)
-            
-            Text(HindiTranslator.translate(text, isHindi: isHindi))
-                .font(.system(.caption2, design: .rounded).weight(.medium))
-                .foregroundColor(DesignSystem.primaryText)
-                .lineLimit(2)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(DesignSystem.cricketGreen.opacity(0.08))
-        )
-    }
-    
     // MARK: - Helpers
     
     private func sectionHeader(_ title: String, icon: String) -> some View {
@@ -752,14 +728,8 @@ struct ExpandedCricketView: View {
                     .padding(.top, 4)
                 }
                 
-                // Match description/result banner if any + Language Toggle
-                HStack(spacing: 12) {
-                    if !match.matchDescription.isEmpty {
-                        matchDescriptionBanner(match.matchDescription)
-                    } else {
-                        Spacer()
-                    }
-                    
+                HStack {
+                    Spacer()
                     languageToggleButton
                 }
                 .padding(.top, 4)
@@ -804,10 +774,11 @@ struct PulsingDot: View {
             .onAppear {
                 withAnimation(
                     .easeInOut(duration: 1.0)
-                    .repeatForever(autoreverses: true)
+                    .repeatCount(2, autoreverses: true)
                 ) {
                     isPulsing = true
                 }
             }
     }
 }
+

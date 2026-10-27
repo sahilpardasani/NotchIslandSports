@@ -117,7 +117,7 @@ final class NBAService {
         let competition = competitions?.first
         let competitors = competition?["competitors"] as? [[String: Any]] ?? []
 
-        let statusDict = header?["status"] as? [String: Any] ?? (json["status"] as? [String: Any] ?? [:])
+        let statusDict = ESPNStatusParser.summaryStatus(competition: competition, event: header, root: json)
         let statusType = statusDict["type"] as? [String: Any]
         let statusState = statusType?["state"] as? String ?? ""
         let statusDescription = statusType?["shortDetail"] as? String
@@ -163,7 +163,7 @@ final class NBAService {
                    let topAthleteDict = athletes.first,
                    let athlete = topAthleteDict["athlete"] as? [String: Any],
                    let name = athlete["displayName"] as? String,
-                   let value = topAthleteDict["value"] as? Int ?? Int(topAthleteDict["value"] as? Double ?? 0) ?? Int(topAthleteDict["displayValue"] as? String ?? "") {
+                   let value = topAthleteDict["value"] as? Int ?? (topAthleteDict["value"] as? Double).map({ Int($0) }) ?? Int(topAthleteDict["displayValue"] as? String ?? "") {
                     let teamId = topAthleteDict["teamId"] as? String ?? ""
                     let leaderStr = "\(name) (\(value) pts)"
                     
@@ -223,3 +223,4 @@ final class NBAService {
         return TeamInfo(name: name, abbreviation: abbreviation, score: score, logoURL: logoURL)
     }
 }
+

@@ -131,12 +131,12 @@ final class VolleyballService {
     // MARK: - Parse Game Summary
 
     private func parseGameSummary(json: [String: Any], eventId: String, leagueSlug: String) -> VolleyballGame {
-        let event = json["event"] as? [String: Any] ?? [:]
+        let event = json["header"] as? [String: Any] ?? json["event"] as? [String: Any] ?? [:]
         let competitions = event["competitions"] as? [[String: Any]] ?? []
         let competition = competitions.first ?? [:]
         let competitors = competition["competitors"] as? [[String: Any]] ?? []
 
-        let statusDict = event["status"] as? [String: Any] ?? [:]
+        let statusDict = ESPNStatusParser.summaryStatus(competition: competition, event: event, root: json)
         let statusType = statusDict["type"] as? [String: Any] ?? [:]
         let statusState = statusType["state"] as? String ?? ""
         let statusDescription = statusType["description"] as? String ?? ""
@@ -217,3 +217,4 @@ final class VolleyballService {
         return TeamInfo(name: name, abbreviation: abbreviation, score: score, logoURL: logoURL)
     }
 }
+

@@ -1,0 +1,117 @@
+import Foundation
+import CoreGraphics
+import IslandCore
+
+@main struct NotchChecks {
+    static func main() {
+        var count = 0
+        func check(_ condition: Bool, _ name: String) { precondition(condition, name); count += 1 }
+        let screen = CGRect(x: 0,y: 0,width: 1512,height: 982)
+        let left = CGRect(x:0,y:950,width:666,height:32)
+        let right = CGRect(x:846,y:950,width:666,height:32)
+        let compact = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:right,expanded:false,contentHeight:410)
+        check(compact.primary.height == 32 && compact.secondary.height == 32 && compact.tertiary.height == 32, "No collapsed spill below camera band")
+        check(compact.primary.maxY == screen.maxY, "Not below the menu bar")
+        check(compact.primary.midX == 756 && compact.cameraWidth == 180, "Physical camera center")
+        check(compact.primary.width == 404, "Bound compact sports width")
+        check(compact.secondary.maxY == screen.maxY && compact.tertiary.maxY == screen.maxY, "All three top anchored")
+        check(compact.secondary.maxX < compact.primary.minX && compact.tertiary.minX > compact.primary.maxX, "Gaps do not overlap")
+        let expanded = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:right,expanded:true,contentHeight:470)
+        check(expanded.primary.midX == compact.primary.midX && expanded.primary.maxY == compact.primary.maxY, "Expand down from camera")
+        check(expanded.primary.height == 520, "Expanded header protects camera")
+        check(expanded.secondary.minX >= screen.minX && expanded.tertiary.maxX <= screen.maxX, "Three panels stay on screen")
+        let other = CGRect(x:-1512,y:500,width:1512,height:982)
+        let negative = NotchGeometry.layout(screen:other,safeTop:32,leftArea:nil,rightArea:nil,expanded:false,contentHeight:410)
+        check(negative.primary.midX == other.midX && negative.primary.maxY == other.maxY, "Negative-coordinate display")
+        let malformed = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:CGRect(x:1400,y:950,width:112,height:32),expanded:false,contentHeight:410)
+        check(malformed.cameraWidth == 180 && malformed.primary.width == 404, "Reject oversized notch measurement")
+        let plain = NotchGeometry.layout(screen:screen,safeTop:0,leftArea:nil,rightArea:nil,expanded:false,contentHeight:410)
+        check(plain.cameraHeight == 0 && plain.primary.maxY == 978, "Non-notched display fallback")
+        let scaled = NotchGeometry.layout(screen:screen,safeTop:24,leftArea:nil,rightArea:nil,expanded:false,contentHeight:410)
+        check(scaled.primary.height == 24, "Scaled camera bands do not inherit the old minimum height")
+        let clockLayout = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:right,expanded:true,contentHeight:120)
+        check(clockLayout.primary.width == compact.primary.width && clockLayout.primary.height == 170, "Timer opens as a compact control panel")
+        check(clockLayout.primary.midX == compact.primary.midX && clockLayout.primary.maxY == screen.maxY, "Timer expansion preserves camera anchor")
+        let narrowClock = NotchGeometry.layout(screen:CGRect(x:0,y:0,width:800,height:600),safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120)
+        check(narrowClock.secondary.minX >= 0 && narrowClock.tertiary.maxX <= 800, "Timer and satellites remain on a smaller display")
+        let clear = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [], expanded: false, satelliteCount: 2)
+        check(clear.primary == compact.primary && clear.secondary == compact.secondary, "Clear menus retain centered layout")
+        let menu = CGRect(x: 0, y: 950, width: 660, height: 32)
+        let shifted = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [menu], expanded: false, satelliteCount: 2)
+        check(shifted.primary == compact.primary, "Crowded app menu cannot move both scores to the right")
+        check(shifted.secondary!.minX > shifted.primary.maxX && shifted.tertiary!.minX > shifted.primary.maxX, "Both satellites move to free side")
+        check(!shifted.secondary!.intersects(menu) && !shifted.tertiary!.intersects(menu), "Satellites avoid measured menus")
+        let rightMenu = CGRect(x: 850, y: 950, width: 662, height: 32)
+        let shiftedLeft = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [rightMenu], expanded: false, satelliteCount: 2)
+        check(shiftedLeft.primary == compact.primary && shiftedLeft.secondary!.maxX < shiftedLeft.primary.minX && shiftedLeft.tertiary!.maxX < shiftedLeft.primary.minX, "Right-side crowding moves pills left")
+        let crowded = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [menu, rightMenu], expanded: false, satelliteCount: 2)
+        check(crowded.secondary == nil && crowded.tertiary == nil, "Overflow merges when neither side fits")
+        check(crowded.primary == compact.primary, "Crowding cannot erase the primary score ears")
+        check(MenuBarPlacement.appKitRect(CGRect(x: -200, y: -100, width: 80, height: 32), mainDisplayTop: 982) == CGRect(x: -200, y: 1050, width: 80, height: 32), "AX coordinates preserve negative-origin displays")
+        let below = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [CGRect(x: 0, y: 0, width: 1512, height: 800)], expanded: false, satelliteCount: 2)
+        check(below.primary == clear.primary && below.tertiary == clear.tertiary, "Ordinary content below menu bar never displaces island")
+        let fallback = [CGRect(x: 0, y: 922, width: 666, height: 60),
+                        CGRect(x: 1272, y: 922, width: 240, height: 60)]
+        let unknown = MenuBarPlacement.layout(base: compact, screen: screen, occupied: fallback, expanded: false, satelliteCount: 2)
+        check(unknown.primary == clear.primary, "Missing Accessibility permission preserves centered score layout")
+        check(unknown.secondary != nil && unknown.tertiary != nil, "Fallback still fits two satellites on free side")
+        check(unknown.primary.midX == compact.centerX && unknown.primary.height == 32, "Fallback cannot shift camera anchor or spill below menu bar")
+        let merged = MenuBarPlacement.layout(base: compact, screen: screen, occupied: fallback, expanded: false, satelliteCount: 0)
+        check(merged.primary == compact.primary && merged.secondary == nil && merged.tertiary == nil, "Merged primary keeps both score ears")
+        let opened = MenuBarPlacement.layout(base: expanded, screen: screen, occupied: fallback, expanded: true, satelliteCount: 2)
+        check(opened.primary == expanded.primary && opened.primary.midX == unknown.primary.midX, "Expansion does not jump sideways from fallback placement")
+        let otherFallback = fallback.map { $0.offsetBy(dx: -1512, dy: 500) }
+        let otherPlacement = MenuBarPlacement.layout(base: negative, screen: other, occupied: otherFallback, expanded: false, satelliteCount: 2)
+        check(otherPlacement.primary == negative.primary, "Menu fallback preserves anchor on negative-origin display")
+        for occupied in [[], [menu], [rightMenu], [menu, rightMenu], fallback] {
+            let before = MenuBarPlacement.layout(base: compact, screen: screen, occupied: occupied, expanded: false, satelliteCount: 2)
+            for height in [120.0, 180.0, 284.0, 420.0] {
+                let base = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: left, rightArea: right, expanded: true, contentHeight: height)
+                let after = MenuBarPlacement.layout(base: base, screen: screen, occupied: occupied, expanded: true, satelliteCount: 2)
+                check(before.primary.minX == after.primary.minX && before.primary.width == after.primary.width && before.primary.maxY == after.primary.maxY && before.secondary == after.secondary && before.tertiary == after.tertiary,
+                      "Every expanded page preserves the compact footprint and both companion frames, even beside crowded menus")
+            }
+        }
+        let plainExpanded = NotchGeometry.layout(screen:screen,safeTop:0,leftArea:nil,rightArea:nil,expanded:true,contentHeight:284)
+        check(plain.primary.width == plainExpanded.primary.width && plain.secondary == plainExpanded.secondary && plain.tertiary == plainExpanded.tertiary, "Plain display expands vertically only")
+        let negativeExpanded = NotchGeometry.layout(screen:other,safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:284)
+        check(negative.primary.minX == negativeExpanded.primary.minX && negative.secondary == negativeExpanded.secondary && negative.tertiary == negativeExpanded.tertiary, "Negative-origin display expands vertically only")
+        for frame in [compact.secondary, compact.tertiary] {
+            let tucked = NotchGeometry.tuckedSatellite(frame, toward: compact.centerX)
+            check(tucked.maxY == frame.maxY && tucked.width < frame.width && abs(tucked.midX - compact.centerX) < abs(frame.midX - compact.centerX), "Split emerges toward companion position while its top remains fixed")
+        }
+        var selection = ActivitySelection()
+        selection.update(available:[.sports,.clock,.calendar])
+        check(selection.primary == .sports && selection.secondary == .clock && selection.tertiary == nil && selection.overflow.isEmpty, "Calendar cannot create third split")
+        selection.update(available:[.sports,.clock,.calendar,.music])
+        check(selection.tertiary == .music && selection.overflow.isEmpty, "Three live activities, Calendar outside slots")
+        selection.update(available:[.sports,.calendar])
+        check(selection.secondary == nil && selection.tertiary == nil, "Merge when timer ends, even with calendar")
+        func observed(_ id:String = "tea", _ seconds:Double = 120, paused:Bool = false, identity:String? = "tea") -> ObservedClockTimer {
+            .init(id:id,remaining:seconds,paused:paused,controlIdentifier:identity)
+        }
+        check(ClockControlPolicy.accepts(previous:observed(),current:observed("tea",118),age:2,command:.pause), "Fresh pause")
+        check(!ClockControlPolicy.accepts(previous:observed(),current:observed("tea",118),age:2,command:.resume), "No wrong-state action")
+        check(!ClockControlPolicy.accepts(previous:observed(),current:observed("other",118,identity:"other"),age:2,command:.cancel), "No other timer action")
+        check(!ClockControlPolicy.accepts(previous:observed(),current:observed(),age:6,command:.cancel), "No stale controls")
+        check(!ClockControlPolicy.accepts(previous:observed(identity:nil),current:observed(),age:1,command:.pause), "No path-only controls")
+        check(!ClockControlPolicy.accepts(previous:observed(),current:observed("tea",300),age:1,command:.pause), "Reject changed countdown")
+        check(ClockControlPolicy.accepts(previous:observed(paused:true),current:observed(paused:true),age:2,command:.resume), "Fresh resume")
+        func card(_ id:String) -> ClockAXNode { .init(role:"AXGroup",identifier:id,children:[.init(role:"AXStaticText",text:"02:00"),.init(role:"AXButton",text:"Pause"),.init(role:"AXButton",text:"Cancel")]) }
+        let timers = ClockTimerParser.parse(.init(role:"AXApplication",children:[card("tea")]))
+        check(timers.first?.controlIdentifier == "tea", "Target smallest card, not application")
+        let duplicate = ClockTimerParser.parse(.init(role:"AXApplication",children:[card("tea"),card("tea")]))
+        check(duplicate.count == 1 && !duplicate[0].canControl, "Ambiguous identities disable commands")
+        check(CompactActivityText.score("74/3 (12.1/20 ov, target 178)") == "74/3", "Overs and target do not overflow the capsule")
+        check(CompactActivityText.score("187 & 46/4") == "187 & 46/4", "Preserve multi-innings scores")
+        check(CompactActivityText.score("  ") == "—", "Missing compact score")
+        check(compact.primary.width + compact.secondary.width * 2 + 16 < 620, "Compact footprint leaves more menu-bar room")
+        check(!ClockSetupState.resolve(enabled:true,trusted:false,connecting:true,validated:false,failed:false).canFinish, "Permission pending cannot finish setup")
+        check(!ClockSetupState.resolve(enabled:true,trusted:true,connecting:true,validated:false,failed:false).canFinish, "In-flight connection cannot finish setup")
+        check(ClockSetupState.resolve(enabled:true,trusted:true,connecting:false,validated:true,failed:false).canFinish, "Validated connection can finish setup")
+        check(!ClockSetupState.resolve(enabled:true,trusted:false,connecting:false,validated:true,failed:false).canFinish, "Revoked permission invalidates a prior setup")
+        check(!ClockSetupState.resolve(enabled:true,trusted:true,connecting:false,validated:false,failed:true).canFinish, "Failed native connection cannot finish setup")
+        check(ClockSetupState.resolve(enabled:false,trusted:false,connecting:false,validated:false,failed:false).canFinish, "Optional Clock can be explicitly disabled")
+        print("Passed \(count) notch geometry and native-control checks.")
+    }
+}

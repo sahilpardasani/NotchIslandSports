@@ -5,13 +5,14 @@ import os
 
 final class TennisService {
 
-    private let apiClient = APIClient.shared
+    private let loadJSON: (URL, Bool) async throws -> [String: Any]
+    init(loadJSON: @escaping (URL, Bool) async throws -> [String: Any] = { url, fresh in
+        try await APIClient.shared.fetchRawJSON(from: url, fresh: fresh)
+    }) { self.loadJSON = loadJSON }
     private let logger = Logger(subsystem: "com.notchisland.sports", category: "TennisService")
 
     private let atpScoreboardURL = "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard"
     private let wtaScoreboardURL = "https://site.api.espn.com/apis/site/v2/sports/tennis/wta/scoreboard"
-    private let atpSummaryBaseURL = "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/summary"
-    private let wtaSummaryBaseURL = "https://site.api.espn.com/apis/site/v2/sports/tennis/wta/summary"
 
     // MARK: - Fetch All Matches
 
@@ -93,14 +94,19 @@ final class TennisService {
 
     // MARK: - Fetch Match Detail
 
-    func fetchMatchDetail(eventId: String, isWTA: Bool) async throws -> TennisMatch {
-        let baseURL = isWTA ? wtaSummaryBaseURL : atpSummaryBaseURL
-        guard let url = URL(string: "\(baseURL)?event=\(eventId)") else {
-            throw NetworkError.invalidURL
-        }
-
-        let json = try await apiClient.fetchRawJSON(from: url)
-        return parseMatchSummary(json: json, eventId: eventId, isWTA: isWTA)
+    func fetchMatchDetail(eventId: String, isWTA: Bool, eventDate: Date? = nil) async throws -> TennisMatch {
+        // Tennis scoreboard IDs identify competitions inside a tournament, not
+        // an ordinary team-sport summary event. Refresh exactly the selected tour/day.
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyyMMdd"
+        let base = isWTA ? wtaScoreboardURL : atpScoreboardURL
+        guard let url = URL(string: "\(base)?dates=\(formatter.string(from: eventDate ?? Date()))") else { throw NetworkError.invalidURL }
+        let json = try await loadJSON(url, true)
+        guard let selected = parseScoreboard(json: json, isWTA: isWTA, limitCompleted: false)
+            .first(where: { $0.id == eventId }) else { throw NetworkError.noData }
+        return selected
     }
 
     // MARK: - Fetch Tour Matches
@@ -110,11 +116,11 @@ final class TennisService {
             throw NetworkError.invalidURL
         }
 
-        let json = try await apiClient.fetchRawJSON(from: requestURL)
+        let json = try await loadJSON(requestURL, false)
         return parseScoreboard(json: json, isWTA: isWTA)
     }
 
-    private func parseScoreboard(json: [String: Any], isWTA: Bool) -> [TennisMatch] {
+    private func parseScoreboard(json: [String: Any], isWTA: Bool, limitCompleted: Bool = true) -> [TennisMatch] {
         guard let events = json["events"] as? [[String: Any]] else {
             logger.warning("No events found in tennis scoreboard")
             return []
@@ -159,7 +165,7 @@ final class TennisService {
         let upcomingMatches = matches.filter { $0.status == .upcoming }
         let completedMatches = matches.filter { $0.status == .completed }
         
-        let truncatedCompleted = Array(completedMatches.prefix(20))
+        let truncatedCompleted = limitCompleted ? Array(completedMatches.prefix(20)) : completedMatches
         let finalMatches = liveMatches + upcomingMatches + truncatedCompleted
 
         logger.info("TennisService parsed \(liveMatches.count) live, \(upcomingMatches.count) upcoming, \(completedMatches.count) completed matches.")
@@ -213,6 +219,9 @@ final class TennisService {
             homeLogoURL: player1Info.flagURL,
             awayLogoURL: player2Info.flagURL,
             sets: setScores,
+            currentGameScore: (player1["point"] as? String).flatMap { first in
+                (player2["point"] as? String).map { GameScore(player1Points: first, player2Points: $0) }
+            },
             servingPlayer: servingPlayer,
             currentSet: max(setScores.count, 1),
             tournamentName: tournamentName,
@@ -222,82 +231,6 @@ final class TennisService {
         )
     }
 
-
-    // MARK: - Parse Match Summary
-
-    private func parseMatchSummary(json: [String: Any], eventId: String, isWTA: Bool) -> TennisMatch {
-        let header = json["header"] as? [String: Any]
-        let competitions = header?["competitions"] as? [[String: Any]]
-        let competition = competitions?.first
-        let competitors = competition?["competitors"] as? [[String: Any]] ?? []
-
-        let statusDict = header?["status"] as? [String: Any] ?? (json["status"] as? [String: Any] ?? [:])
-        let statusType = statusDict["type"] as? [String: Any]
-        let statusState = statusType?["state"] as? String ?? ""
-        let statusDescription = statusType?["description"] as? String ?? ""
-        let matchStatus = ESPNStatusParser.parseState(statusState)
-
-        var player1Info = PlayerInfo(name: "TBD", country: "", score: "", flagURL: nil)
-        var player2Info = PlayerInfo(name: "TBD", country: "", score: "", flagURL: nil)
-        var setScores: [SetScore] = []
-
-        if competitors.count >= 2 {
-            player1Info = parsePlayerInfo(from: competitors[0])
-            player2Info = parsePlayerInfo(from: competitors[1])
-
-            let sets1 = competitors[0]["linescores"] as? [[String: Any]] ?? []
-            let sets2 = competitors[1]["linescores"] as? [[String: Any]] ?? []
-            setScores = parseSets(player1Sets: sets1, player2Sets: sets2)
-        }
-
-        // Parse current game score from the summary
-        var currentGameScore: GameScore?
-        var servingPlayer: Int?
-
-        if let situation = json["situation"] as? [String: Any] {
-            if let p1Points = situation["player1Points"] as? String,
-               let p2Points = situation["player2Points"] as? String {
-                currentGameScore = GameScore(player1Points: p1Points, player2Points: p2Points)
-            } else if let p1Points = situation["competitor1Points"] as? String,
-                      let p2Points = situation["competitor2Points"] as? String {
-                currentGameScore = GameScore(player1Points: p1Points, player2Points: p2Points)
-            }
-
-            if let serving = situation["servingCompetitor"] as? Int {
-                servingPlayer = serving
-            } else if let server = situation["server"] as? [String: Any],
-                      let serverId = server["competitorId"] as? String {
-                // Match competitor IDs to determine serving player
-                let comp1Id = competitors.first?["id"] as? String
-                servingPlayer = (serverId == comp1Id) ? 1 : 2
-            }
-        }
-
-        let season = (json["header"] as? [String: Any])?["season"] as? [String: Any]
-        let tournamentName = season?["name"] as? String
-        let round = statusType?["shortDetail"] as? String
-
-        return TennisMatch(
-            id: eventId,
-            status: matchStatus,
-            player1Name: player1Info.name,
-            player2Name: player2Info.name,
-            player1Country: player1Info.country,
-            player2Country: player2Info.country,
-            homeScore: player1Info.score,
-            awayScore: player2Info.score,
-            statusText: statusDescription,
-            homeLogoURL: player1Info.flagURL,
-            awayLogoURL: player2Info.flagURL,
-            sets: setScores,
-            currentGameScore: currentGameScore,
-            servingPlayer: servingPlayer,
-            currentSet: max(setScores.count, 1),
-            tournamentName: tournamentName,
-            round: round,
-            isWTA: isWTA
-        )
-    }
 
     // MARK: - Helper Parsers
 
@@ -320,7 +253,8 @@ final class TennisService {
             ?? athlete?["nationality"] as? String
             ?? ""
 
-        let score = dict["score"] as? String ?? ""
+        let rawScore = dict["score"]
+        let score = rawScore as? String ?? (rawScore as? NSNumber)?.stringValue ?? ""
         let flagURL = country?["href"] as? String
 
         return PlayerInfo(name: name, country: countryCode, score: score, flagURL: flagURL)
@@ -336,6 +270,7 @@ final class TennisService {
 
             if i < player1Sets.count {
                 p1Games = player1Sets[i]["value"] as? Int
+                    ?? (player1Sets[i]["value"] as? NSNumber)?.intValue
                     ?? Int(player1Sets[i]["value"] as? String ?? "") ?? 0
             } else {
                 p1Games = 0
@@ -343,6 +278,7 @@ final class TennisService {
 
             if i < player2Sets.count {
                 p2Games = player2Sets[i]["value"] as? Int
+                    ?? (player2Sets[i]["value"] as? NSNumber)?.intValue
                     ?? Int(player2Sets[i]["value"] as? String ?? "") ?? 0
             } else {
                 p2Games = 0
@@ -363,3 +299,4 @@ final class TennisService {
 
 
 }
+

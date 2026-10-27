@@ -12,12 +12,12 @@ final class F1Service {
 
     // MARK: - Fetch Races
 
-    func fetchRaces() async throws -> [F1Race] {
+    func fetchRaces(fresh: Bool = false) async throws -> [F1Race] {
         guard let url = URL(string: scoreboardURL) else {
             throw NetworkError.invalidURL
         }
 
-        let json = try await apiClient.fetchRawJSON(from: url)
+        let json = try await apiClient.fetchRawJSON(from: url, fresh: fresh)
         return parseScoreboard(json: json)
     }
 
@@ -145,3 +145,4 @@ final class F1Service {
         return races
     }
 }
+
