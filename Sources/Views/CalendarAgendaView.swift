@@ -91,7 +91,6 @@ struct CalendarAgendaView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.055)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(
             event.id == currentEvent?.id ? Color.cyan.opacity(0.35) : Color.white.opacity(0.04), lineWidth: 1))
-        .help(event.title + "\n" + agendaEventTime(event, now: now))
         .accessibilityElement(children: .combine)
     }
 }

@@ -51,6 +51,10 @@ targets:
     sources:
       - path: Sources
         type: group
+    postBuildScripts:
+      - name: Build native media adapter
+        script: 'NOTCH_ARCH="$ARCHS" bash "$SRCROOT/scripts/build-media-adapter.sh" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH"'
+        basedOnDependencyAnalysis: false
     resources:
       - path: Resources
         type: group

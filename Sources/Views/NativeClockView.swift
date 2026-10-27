@@ -1,7 +1,7 @@
 import SwiftUI
 import IslandCore
 
-/// Content only: permission/setup and observation diagnostics belong in Clock Settings.
+/// Content only: permission/setup and observation diagnostics belong in About → Configure.
 struct NativeClockView: View {
     @ObservedObject var manager: NativeClockManager
     @State private var cancelling: ObservedClockTimer?
@@ -16,7 +16,7 @@ struct NativeClockView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "timer").font(.system(size: 24, weight: .medium)).foregroundColor(.orange)
                     Text("No timer available").font(.system(size: 15, weight: .medium))
-                    Text("Manage native timers in the menu-bar Clock Settings.")
+                    Text("Manage native timers in the About → Configure.")
                         .font(.system(size: 11)).foregroundColor(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -33,9 +33,8 @@ struct NativeClockView: View {
                 }
                 .frame(height: CGFloat(min(manager.timers.count, 2)) * 88)
                 if manager.controlMessage != nil {
-                    Text("Couldn’t update timer · Details in Clock Settings")
+                    Text("Couldn’t update timer · Details in About → Configure")
                         .font(.system(size: 10)).foregroundColor(.orange)
-                        .help(manager.controlMessage ?? "")
                 } else if manager.timers.contains(where: { !$0.canControl }) {
                     Text("Native controls unavailable")
                         .font(.system(size: 10)).foregroundColor(.secondary)
@@ -69,15 +68,13 @@ struct NativeTimerRow: View {
                 }
                 .buttonStyle(TimerCircleButtonStyle(tint: .orange, background: Color.orange.opacity(0.18)))
                 .accessibilityLabel(timer.paused ? "Resume \(title)" : "Pause \(title)")
-                .help(timer.paused ? "Resume timer" : "Pause timer")
                 Button(action: onCancel) {
-                    Image(systemName: "xmark")
+                    Image(systemName: "stop.fill")
                         .font(.system(size: 16, weight: .semibold))
                         .frame(width: 46, height: 46).contentShape(Circle())
                 }
                 .buttonStyle(TimerCircleButtonStyle(tint: .white, background: Color.white.opacity(0.14)))
                 .accessibilityLabel("Cancel \(title)")
-                .help("Cancel timer")
             }.disabled(busy || !timer.canControl)
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 0) {

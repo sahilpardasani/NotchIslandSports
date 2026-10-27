@@ -34,12 +34,16 @@ final class NowPlayingManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(enabled, forKey: "ExperimentalMediaEnabled")
             if enabled && isActive { updateNowPlayingInfo() }
-            else { timer?.invalidate(); currentTrack = nil }
+            else {
+                adapter.stop(); adapterRetry?.cancel(); adapterRetry = nil
+                timer?.invalidate(); timeout?.cancel(); requestID = nil; currentTrack = nil
+                commandProcess?.terminate(); commandProcess = nil
+            }
         }
     }
     var canControl: Bool {
         guard let id = currentTrack?.sourceBundleID else { return false }
-        return id == "com.apple.Music" || id == "com.spotify.client"
+        return adapter.listening || id == "com.apple.Music" || id == "com.spotify.client"
     }
     func elapsedTime() -> TimeInterval { positionAnchor.value(at: ProcessInfo.processInfo.systemUptime) }
     private var getPID: (@convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void)?
@@ -52,6 +56,8 @@ final class NowPlayingManager: ObservableObject {
     
     // MARK: - Private Properties
     
+    private let adapter = SystemMediaAdapter()
+    private var adapterRetry: DispatchWorkItem?
     private var timer: Timer?
     private var mediaRemoteBundle: CFBundle?
     private var getNowPlayingInfoFunc: (@convention(c) (DispatchQueue, @escaping ([String: Any]?) -> Void) -> Void)?
@@ -60,7 +66,14 @@ final class NowPlayingManager: ObservableObject {
     
     init() {
         loadMediaRemote()
-
+        adapter.onSnapshot = { [weak self] snapshot in self?.accept(snapshot) }
+        adapter.onFailure = { [weak self] in
+            guard let self, self.isActive, self.enabled else { return }
+            self.controlError = "Media connection unavailable. Retrying automatically."
+            let retry = DispatchWorkItem { [weak self] in self?.updateNowPlayingInfo() }
+            self.adapterRetry = retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: retry)
+        }
     }
     
     deinit {
@@ -103,6 +116,8 @@ final class NowPlayingManager: ObservableObject {
 
     func stopPolling() {
         isActive = false
+        adapter.stop(); adapterRetry?.cancel(); adapterRetry = nil
+        currentTrack = nil
         timer?.invalidate(); timer = nil
         timeout?.cancel(); timeout = nil
         requestID = nil
@@ -122,6 +137,11 @@ final class NowPlayingManager: ObservableObject {
 
     func updateNowPlayingInfo() {
         guard isActive, enabled, requestID == nil else { return }
+        if adapter.available {
+            adapterRetry?.cancel(); adapterRetry = nil
+            adapter.start()
+            return
+        }
         guard let getInfo = getNowPlayingInfoFunc else { return }
         let token = UUID()
         requestID = token
@@ -164,6 +184,24 @@ final class NowPlayingManager: ObservableObject {
             }
         }
         if let getPID { getPID(DispatchQueue.main, fetch) } else { fetch(0) }
+    }
+
+    private func accept(_ snapshot: MediaSnapshot?) {
+        guard isActive, enabled else { return }
+        guard let snapshot else { currentTrack = nil; return }
+        controlError = nil
+        if snapshot.artwork != lastArtwork {
+            lastArtwork = snapshot.artwork
+            artworkImage = snapshot.artwork.flatMap(NSImage.init(data:))
+            lastColor = artworkImage.flatMap { extractDominantColor(from: $0) } ?? Color(hex: "A855F7")
+        }
+        let position = snapshot.position(now: Date().timeIntervalSince1970)
+        positionAnchor = PlaybackAnchor(position: position, instant: ProcessInfo.processInfo.systemUptime,
+            rate: snapshot.rate, duration: snapshot.duration)
+        let track = NowPlayingTrack(title: snapshot.title, artist: snapshot.artist, album: snapshot.album,
+            duration: snapshot.duration, elapsedTime: position, isPlaying: snapshot.playing,
+            artwork: snapshot.artwork, dominantColor: lastColor, sourceBundleID: snapshot.bundleID)
+        if currentTrack != track { currentTrack = track }
     }
 
     // MARK: - Dominant Color Extraction
@@ -236,6 +274,20 @@ final class NowPlayingManager: ObservableObject {
 
     private enum Command { case playPause, next, previous, forward, backward }
     private func send(_ command: Command) {
+        if adapter.listening, isActive, enabled, let track = currentTrack {
+            let id: Int
+            switch command {
+            case .playPause: id = 2
+            case .next: id = 4
+            case .previous: id = 5
+            case .forward: id = 13
+            case .backward: id = 12
+            }
+            adapter.send(id, expected: track) { [weak self] success in
+                self?.controlError = success ? nil : "The media player changed or rejected this control. Try again."
+            }
+            return
+        }
         guard canControl, commandProcess == nil, let source = currentTrack?.sourceBundleID,
               let getPID else { return }
         getPID(DispatchQueue.main) { [weak self] pid in

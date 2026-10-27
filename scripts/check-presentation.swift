@@ -37,7 +37,7 @@ import IslandCore
         check(IslandPresentation(defaults: defaults).merged, "Merge preference survives restart")
         model.handleDrag(horizontal: -40, vertical: 0)
         check(model.selection.primary == .music && model.merged, "Merged live activities still accessible")
-        model.setMerged(false)
+        model.handleDrag(horizontal: 45, vertical: 0, held: true)
         check(model.showsSecondary && model.showsTertiary, "Menu restores all live slots")
         check(!IslandPresentation(defaults: defaults).merged, "Split preference persists")
         model.open(.clock)
@@ -62,6 +62,12 @@ import IslandCore
         check(!model.merged && !model.expanded, "Held vertical drag doesn't accidentally merge")
         model.handleDrag(horizontal: -10, vertical: 0, held: true)
         check(!model.merged, "Small drag doesn't merge")
+        model.update(sports: true, music: false, clock: false)
+        model.update(sports: true, music: true, clock: false)
+        check(model.selection.primary == .sports && model.selection.secondary == .music && model.showsSecondary,
+              "A newly observed browser video splits from the existing sports activity")
+        model.open(.music)
+        check(model.expanded && model.selectedTab == .music, "Media satellite opens its control panel")
         withExtendedLifetime(subscription) {}
         print("Passed \(count) presentation checks, including persistent merge, Calendar browsing and no repeated layout publications.")
     }

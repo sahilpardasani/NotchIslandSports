@@ -20,6 +20,7 @@ final class NativeClockManager: ObservableObject {
     private let defaults: UserDefaults
     private let reader = ClockAccessibilityReader()
     private var poll: Timer?
+    private var lastTrusted = AXIsProcessTrusted()
     private var reading = false
     private var running = false
     private var generation = 0
@@ -47,9 +48,15 @@ final class NativeClockManager: ObservableObject {
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification,
                      NSWorkspace.didActivateApplicationNotification] {
             observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
-                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                      app.bundleIdentifier == "com.apple.clock" else { return }
-                Task { @MainActor in self?.refresh() }
+                let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                Task { @MainActor in
+                    guard let self else { return }
+                    let trusted = AXIsProcessTrusted()
+                    if app?.bundleIdentifier == "com.apple.clock" || trusted != self.lastTrusted {
+                        self.lastTrusted = trusted
+                        self.refresh()
+                    }
+                }
             })
         }
         refresh()
@@ -88,8 +95,10 @@ final class NativeClockManager: ObservableObject {
 
     func refresh() {
         guard running, enabled else { return }
-        guard AXIsProcessTrusted() else {
-            clear("Allow Accessibility in System Settings, then choose Refresh Clock")
+        lastTrusted = AXIsProcessTrusted()
+        guard lastTrusted else {
+            clear("Allow NotchIslandSports in System Settings → Privacy & Security → Accessibility. Observation resumes automatically.")
+            schedule(after: 15)
             return
         }
         guard !reading else { return }
@@ -121,10 +130,15 @@ final class NativeClockManager: ObservableObject {
               let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.clock").first else {
             controlMessage = "Native controls are unavailable. Open Clock to manage this timer."; return
         }
+        guard let latest = timers.first(where: { $0.id == timer.id }),
+              latest.controlIdentifier == timer.controlIdentifier,
+              command == .cancel || latest.paused == timer.paused else {
+            controlMessage = "This timer changed. Try its current control."; return
+        }
         controlBusy = true
         controlMessage = nil
         let token = generation
-        reader.perform(command, timer: timer, observedAt: observedAt, pid: app.processIdentifier) { [weak self] success in
+        reader.perform(command, timer: latest, observedAt: observedAt, pid: app.processIdentifier) { [weak self] success in
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
                 self.controlBusy = false
@@ -198,9 +212,8 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                 }
             }
             guard let app = self.application else { completion(nil); return }
-            var hidden: CFTypeRef?
-            _ = AXUIElementCopyAttributeValue(app, kAXHiddenAttribute as CFString, &hidden)
-            guard (hidden as? Bool) != true else { completion(nil); return }
+            // Hidden/minimized Clock may still expose its native timer tree. Read what
+            // Clock exposes and validate identities; foreground visibility is not a capability.
             var windows: CFTypeRef?
             guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows) == .success,
                   let elements = windows as? [AXUIElement], !elements.isEmpty else { completion(nil); return }
@@ -208,9 +221,6 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
             let deadline = Date().addingTimeInterval(0.8)
             var exhausted = elements.count > 2
             let children = elements.prefix(2).enumerated().compactMap { windowIndex, window -> ClockAXNode? in
-                var minimized: CFTypeRef?
-                _ = AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
-                guard (minimized as? Bool) != true else { return ClockAXNode(role: "AXWindow") }
                 return self.node(window, path: "clock.\(windowIndex)", depth: 0, budget: &budget, deadline: deadline, exhausted: &exhausted)
             }
             // Partial trees must never imply that a previously seen timer was cancelled.

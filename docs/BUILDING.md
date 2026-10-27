@@ -56,3 +56,7 @@ NOTCH_BUILD_SYSTEM=native NOTCH_DEBUG_INFO=none bash scripts/build-app.sh
 ```
 
 Use that path only if the SDK exists on your Mac. In this agent's restricted environment, `NOTCH_PACKAGE_SANDBOX=0` and workspace-local compiler caches were also necessary for SwiftPM's nested build sandbox; a normal Terminal build may not need them. Prefer a matching stable toolchain for release builds. See the recorded validation in `IMPLEMENTATION.md`.
+
+### Preview 1.6 media helper
+
+`scripts/build-app.sh` also compiles the pinned Objective-C sources in `Vendor/mediaremote-adapter` using `xcrun clang`, bundles the system-Perl launcher and BSD license, and signs the nested framework before the app. No CMake or downloaded binary is needed. `NOTCH_ARCH=arm64` or `x86_64` selects a preview architecture. XcodeGen runs the same helper packaging step; its architecture list supports a universal helper. Running only `swift build` produces an executable without this packaged browser-media adapter; use the app build script to test the complete app. Private MediaRemote and native Clock Accessibility remain experimental. Developer ID signing and notarization are still required for normal public distribution; an ad hoc preview is not notarized.

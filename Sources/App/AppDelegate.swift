@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let clock = NativeClockManager()
     private let calendar = CalendarManager()
     private let presentation = IslandPresentation()
+    private var setupWindow: NSWindow?
     private var systemSleeping = false
     private var displaySleeping = false
     private var sessionInactive = false
@@ -28,6 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         setupPanelController()
         resumeProviders()
         observeSystemEvents()
+        if !UserDefaults.standard.bool(forKey: "IslandSetupCompleted") { showSetup() }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -46,7 +48,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "sportscourt.fill", accessibilityDescription: "NotchIslandSports")
             button.image?.size = NSSize(width: 18, height: 18)
-            button.toolTip = "NotchIslandSports"
         }
         
         let menu = NSMenu()
@@ -65,64 +66,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             value.representedObject = activity.rawValue
             widgets.addItem(value)
         }
-        menu.addItem(widgetItem)
-        item("Separate Live Activities (up to 3)", #selector(toggleSplit), key: "s", in: menu)
-        menu.addItem(.separator())
-
-        // Sport selection submenu
         let sportMenu = NSMenu()
-        let sportMenuItem = NSMenuItem(title: "Select Sport", action: nil, keyEquivalent: "")
-        sportMenuItem.submenu = sportMenu
-        
-        let allItem = NSMenuItem(title: "All Sports", action: #selector(filterAllSports), keyEquivalent: "")
-        allItem.target = self
-        sportMenu.addItem(allItem)
-        sportMenu.addItem(NSMenuItem.separator())
-        
+        let sportItem = NSMenuItem(title: "Filter Sports", action: nil, keyEquivalent: "")
+        sportItem.submenu = sportMenu
+        item("All Sports", #selector(filterAllSports), in: sportMenu)
         for sport in SportType.allCases {
-            let item = NSMenuItem(title: "\(sport.icon) \(sport.rawValue)", action: #selector(filterSport(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = sport
-            sportMenu.addItem(item)
+            let value = NSMenuItem(title: "\(sport.icon) \(sport.rawValue)", action: #selector(filterSport(_:)), keyEquivalent: "")
+            value.target = self; value.representedObject = sport
+            sportMenu.addItem(value)
         }
-        
-        menu.addItem(sportMenuItem)
-        menu.addItem(NSMenuItem.separator())
-        
-        // Select Match
-        let selectMatchItem = NSMenuItem(title: "Select Match...", action: #selector(toggleMatchSelector), keyEquivalent: "m")
-        selectMatchItem.target = self
-        menu.addItem(selectMatchItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        let openItem = NSMenuItem(title: "Open Island", action: #selector(openIsland), keyEquivalent: "o")
-        openItem.target = self
-        menu.addItem(openItem)
-        let calendarSettings = NSMenu()
-        let calendarItem = NSMenuItem(title: "Calendar Settings", action: nil, keyEquivalent: "")
-        calendarItem.submenu = calendarSettings
-        item("Show Agenda", #selector(openNativeCalendar), key: "c", in: calendarSettings)
-        item("Connect Apple Calendar…", #selector(connectCalendar), in: calendarSettings)
-        item("Refresh Agenda", #selector(refreshCalendar), in: calendarSettings)
-        item("Disconnect Calendar", #selector(disconnectCalendar), in: calendarSettings)
-        item("Open Apple Calendar App", #selector(launchCalendar), in: calendarSettings)
-        menu.addItem(calendarItem)
-        let clockSettings = NSMenu()
-        let clockItem = NSMenuItem(title: "Clock Settings", action: nil, keyEquivalent: "")
-        clockItem.submenu = clockSettings
-        item("Clock Status…", #selector(showClockStatus), in: clockSettings)
-        item("Show Native Timers", #selector(openNativeClock), key: "t", in: clockSettings)
-        item("Enable Clock Observation…", #selector(enableClock), in: clockSettings)
-        item("Refresh Native Timers", #selector(refreshClock), in: clockSettings)
-        item("Disable Clock Observation", #selector(disableClock), in: clockSettings)
-        item("Open Apple Clock App", #selector(launchClock), in: clockSettings)
-        menu.addItem(clockItem)
-        let mediaItem = NSMenuItem(title: "Experimental System Media", action: #selector(toggleMedia(_:)), keyEquivalent: "")
-        mediaItem.target = self
-        mediaItem.state = media.enabled ? .on : .off
-        menu.addItem(mediaItem)
-        menu.addItem(NSMenuItem.separator())
+        widgets.addItem(.separator())
+        widgets.addItem(sportItem)
+        menu.addItem(widgetItem)
+        menu.addItem(.separator())
+        item("Select Match…", #selector(toggleMatchSelector), key: "m", in: menu)
+        menu.addItem(.separator())
 
         // Refresh
         let refreshItem = NSMenuItem(title: "Refresh Now", action: #selector(refreshData), keyEquivalent: "r")
@@ -280,6 +238,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func refreshData() {
+        clock.refresh(); calendar.refresh(); media.updateNowPlayingInfo()
         Task { @MainActor in
             await dataManager.refresh()
         }
@@ -288,10 +247,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.5 Preview\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.6 Preview\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        alert.addButton(withTitle: "Configure…")
+        if alert.runModal() == .alertSecondButtonReturn { showSetup() }
+    }
+
+    private func showSetup() {
+        if let setupWindow { setupWindow.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 490, height: 600),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Set up NotchIslandSports"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: IslandSetupView(clock: clock, calendar: calendar,
+            media: media, presentation: presentation, done: { [weak self] in
+                UserDefaults.standard.set(true, forKey: "IslandSetupCompleted")
+                self?.setupWindow?.close()
+            }))
+        setupWindow = window
+        window.center(); window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
     
     @objc private func toggleNotchSimulation(_ sender: NSMenuItem) {

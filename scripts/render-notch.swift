@@ -22,7 +22,7 @@ import IslandCore
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
-                                  ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+                                  ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
             let clock = NativeClockManager.visualFixture(paused: name == "notch-clock-paused",
                 controllable: name != "notch-clock-unavailable", count: name == "notch-clock-multiple" ? 3 : name == "notch-clock-empty" ? 0 : 1,
                 remaining: name == "notch-clock-multiple" ? 3723 : 197)
@@ -33,7 +33,7 @@ import IslandCore
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : 360,
+                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 220 : 360,
                 expandedWidth: activity == .clock ? 440 : 600)
             presentation.expandedPanelHeight = activity != nil ? geometry.primary.height : 520
             if name == "notch-merged" { presentation.mergeActivities() }
@@ -42,7 +42,7 @@ import IslandCore
                 Color(red: 0.12, green: 0.14, blue: 0.19)
                 Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
                     .padding(.top, canvasHeight - 30).padding(.leading, 28)
-                NotchContentView(hoverState: HoverState(), dataManager: data, nowPlayingManager: media,
+                NotchContentView( dataManager: data, nowPlayingManager: media,
                     clockManager: clock, calendarManager: calendar, presentation: presentation)
                     .frame(width: geometry.primary.width, height: geometry.primary.height)
                     .position(x: geometry.primary.midX, y: screen.maxY - geometry.primary.midY)
@@ -67,6 +67,18 @@ import IslandCore
             host.cacheDisplay(in: host.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent(name + ".png"))
         }
+        let setup = NSHostingView(rootView: IslandSetupView(clock: NativeClockManager(defaults: defaults),
+            calendar: CalendarManager(defaults: defaults), media: media, presentation: IslandPresentation(defaults: defaults), done: {}).background(Color(nsColor: .windowBackgroundColor)))
+        setup.frame = NSRect(x: 0, y: 0, width: 490, height: 600)
+        let setupWindow = NSWindow(contentRect: setup.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        setupWindow.contentView = setup
+        setup.needsLayout = true
+        setup.layoutSubtreeIfNeeded()
+        setupWindow.displayIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        let setupBitmap = setup.bitmapImageRepForCachingDisplay(in: setup.bounds)!
+        setup.cacheDisplay(in: setup.bounds, to: setupBitmap)
+        try setupBitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("setup.png"))
         print("Rendered actual island views with synthetic three-activity fixtures; no live integrations started.")
     }
 }

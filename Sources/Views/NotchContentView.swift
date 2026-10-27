@@ -86,7 +86,6 @@ enum DesignSystem {
 // MARK: - NotchContentView
 
 struct NotchContentView: View {
-    @ObservedObject var hoverState: HoverState
     @ObservedObject var dataManager: SportsDataManager
     @ObservedObject var nowPlayingManager: NowPlayingManager
     @ObservedObject var clockManager: NativeClockManager
@@ -111,7 +110,7 @@ struct NotchContentView: View {
                                 if let error = nowPlayingManager.controlError {
                                     Text(error).font(.caption).foregroundColor(.orange)
                                 } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {
-                                    Text("Playback controls are available for identified Music and Spotify sources.")
+                                    Text("This player is not exposing playback controls.")
                                         .font(.caption).foregroundColor(.secondary)
                                 }
                             }
@@ -129,7 +128,6 @@ struct NotchContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Collapse island")
                     .keyboardShortcut(.cancelAction)
-                    .help("Swipe up to collapse · Swipe sideways to change activity")
                 }
                 .frame(height: presentation.expandedPanelHeight)
                 .transition(.opacity)

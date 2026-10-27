@@ -14,7 +14,6 @@ final class NotchPanelController {
     private var panel: IslandPanel!
     private var secondaryPanel: IslandPanel!
     private var tertiaryPanel: IslandPanel!
-    private let hoverState = HoverState()
     private let dataManager: SportsDataManager
     private let media: NowPlayingManager
     private let calendar: CalendarManager
@@ -41,17 +40,16 @@ final class NotchPanelController {
         panel = makePanel()
         secondaryPanel = makePanel()
         tertiaryPanel = makePanel()
-        let primary = HoverTrackingHostingView(rootView: NotchContentView(hoverState: hoverState,
+        let primary = IslandGestureHostingView(rootView: NotchContentView(
             dataManager: dataManager, nowPlayingManager: media, clockManager: clock, calendarManager: calendar, presentation: presentation))
-        primary.hoverState = hoverState
         primary.onScrollPull = { [weak self] in self?.presentation.pullDown() }
         primary.onScrollPush = { [weak self] in self?.presentation.collapse() }
         primary.onHorizontalSwipe = { [weak self] forward in self?.presentation.cyclePrimary(forward: forward) }
         panel.contentView = primary
-        let secondary = HoverTrackingHostingView(rootView: SecondaryActivityView(
+        let secondary = IslandGestureHostingView(rootView: SecondaryActivityView(
             dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: false))
         secondaryPanel.contentView = secondary
-        let tertiary = HoverTrackingHostingView(rootView: SecondaryActivityView(
+        let tertiary = IslandGestureHostingView(rootView: SecondaryActivityView(
             dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: true))
         tertiaryPanel.contentView = tertiary
         observe()
@@ -74,10 +72,6 @@ final class NotchPanelController {
     }
 
     private func observe() {
-        hoverState.$isHovered.removeDuplicates().sink { [weak self] hovered in
-            guard let self, !self.presentation.pinned else { return }
-            self.presentation.expanded = hovered
-        }.store(in: &cancellables)
         dataManager.$activeMatch.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             self?.queueUpdate()
         }.store(in: &cancellables)
@@ -91,6 +85,10 @@ final class NotchPanelController {
         media.$currentTrack.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         calendar.$currentEvent.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         clock.$timers.map { min($0.count, 2) }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
+        presentation.$expanded.removeDuplicates().dropFirst().sink { [weak self] expanded in
+            guard !expanded else { return }
+            self?.dataManager.showMatchSelector = false
+        }.store(in: &cancellables)
         presentation.objectWillChange.sink { [weak self] in self?.queueUpdate() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.repositionForScreen() }.store(in: &cancellables)
@@ -159,7 +157,7 @@ final class NotchPanelController {
         if presentation.expanded, presentation.expandedPanelHeight != layout.primary.height {
             presentation.expandedPanelHeight = layout.primary.height
         }
-        (panel.contentView as? HoverTrackingHostingView<NotchContentView>)?.swipeHeaderHeight = presentation.cameraHeight + 8
+        (panel.contentView as? IslandGestureHostingView<NotchContentView>)?.swipeHeaderHeight = presentation.cameraHeight + 8
         let animate = animated && !presentation.reduceMotion && !presentation.lowPower
         setFrame(panel, layout.primary, animated: animate)
         setFrame(secondaryPanel, layout.secondary, animated: animate)

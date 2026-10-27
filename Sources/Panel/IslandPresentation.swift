@@ -70,7 +70,7 @@ final class IslandPresentation: ObservableObject {
     func pullDown() { open(selection.primary ?? .calendar) }
     func handleDrag(horizontal: CGFloat, vertical: CGFloat, held: Bool = false) {
         if abs(horizontal) > abs(vertical), abs(horizontal) > 20 {
-            if held { mergeActivities() }
+            if held { setMerged(!merged); collapse() }
             else { cyclePrimary(forward: horizontal < 0) }
         } else if !held, abs(vertical) > abs(horizontal), abs(vertical) > 18 {
             if vertical > 0 { pullDown() } else { collapse() }

@@ -33,7 +33,7 @@ Extract the file and drag NotchIslandSports.app straight into your Applications 
 For the updated preview, follow [Download/build instructions](docs/BUILDING.md). Preview builds are ad hoc signed; a Developer ID signed and notarized release is still pending. Follow normal macOS security prompts.
 
 
-To select match click on the icon in menu bar and select match then hover over the black colored bar and you can choose your matche by clicking it.
+To select match click on the icon in menu bar and select match then choose your match. Pull down to open the island and swipe up to collapse it. Hover does nothing.
 <img width="578" height="256" alt="Screenshot 2026-05-26 at 10 42 41 AM" src="https://github.com/user-attachments/assets/a3703b1f-42aa-45de-af90-33c2e06a2c0d" />
 <img width="265" height="250" alt="Screenshot 2026-05-26 at 10 42 16 AM" src="https://github.com/user-attachments/assets/077881cb-0835-4ff2-a973-edae4128ec07" />
 

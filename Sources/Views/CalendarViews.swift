@@ -16,7 +16,7 @@ struct NativeCalendarView: View {
                     Image(systemName: "calendar").font(.system(size: 32)).foregroundColor(.cyan)
                     Text("Your calendar, at a glance").font(.headline)
                     Text(manager.status).font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
-                    Text("Connect using the menu-bar menu → Calendar Settings.").font(.caption)
+                    Text("Connect using the menu-bar menu → About → Configure.").font(.caption)
                     Text("Read on this Mac. Nothing is changed or uploaded. macOS calls the permission “Full Access” because reading events requires it.")
                         .font(.caption2).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)

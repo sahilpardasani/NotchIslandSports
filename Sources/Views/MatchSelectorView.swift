@@ -51,17 +51,6 @@ struct MatchSelectorView: View {
             
             Spacer()
             
-            // Close button
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    dataManager.showMatchSelector = false
-                }
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(DesignSystem.secondaryText.opacity(0.6))
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 12)
