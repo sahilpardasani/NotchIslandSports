@@ -88,6 +88,14 @@ import IslandCore
         model.setMerged(true)
         model.update(sports: true, music: true, clock: false)
         check(model.showsSecondary && model.selection.secondary == .music, "A new playback session splits again after the previous session was merged")
+        model.update(sports: true, music: true, clock: true, approval: true)
+        check(model.selection.primary == .sports && model.selection.secondary == .approval, "Urgent request keeps sports primary and exposes approval satellite")
+        check(model.selection.overflow == [.clock], "Fourth activity remains swipe reachable")
+        model.open(.approval)
+        model.update(sports: true, music: true, clock: false, approval: true)
+        check(model.expanded && model.selectedTab == .approval, "Score/timer changes never steal approval under review")
+        model.update(sports: true, music: true, clock: true, approval: false)
+        check(model.selection.secondary == .music && model.selection.tertiary == .clock, "Resolving approvals restores ordinary slots")
         withExtendedLifetime(subscription) {}
         print("Passed \(count) presentation checks, including persistent merge, Calendar browsing and no repeated layout publications.")
     }

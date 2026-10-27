@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
     private let media = NowPlayingManager()
     private let clock = NativeClockManager()
     private let calendar = CalendarManager()
+    private let approvals = ApprovalManager()
     private let presentation = IslandPresentation()
     private var setupWindow: NSWindow?
     private var systemSleeping = false
@@ -60,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         let widgets = NSMenu()
         let widgetItem = NSMenuItem(title: "Select Widget", action: nil, keyEquivalent: "")
         widgetItem.submenu = widgets
-        for (title, activity) in [("Sports", IslandActivity.sports), ("Music", .music), ("Apple Clock", .clock), ("Calendar Agenda", .calendar)] {
+        for (title, activity) in [("Sports", IslandActivity.sports), ("Music", .music), ("Apple Clock", .clock), ("Calendar Agenda", .calendar), ("Approvals", .approval)] {
             let value = NSMenuItem(title: title, action: #selector(selectWidget(_:)), keyEquivalent: "")
             value.target = self
             value.representedObject = activity.rawValue
@@ -115,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
     // MARK: - Panel Controller
     
     private func setupPanelController() {
-        panelController = NotchPanelController(dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation)
+        panelController = NotchPanelController(dataManager: dataManager, media: media, clock: clock, calendar: calendar, approvals: approvals, presentation: presentation)
         panelController.setupPanel()
     }
     
@@ -127,6 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         media.startPolling()
         clock.start()
         calendar.start()
+        approvals.start()
         panelController.show()
     }
 
@@ -137,6 +139,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         media.stopPolling()
         clock.stop()
         calendar.stop()
+        approvals.stop()
         panelController?.hide()
     }
 
@@ -247,7 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "NotchIslandSports"
-        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.6 Preview (build 9)\n© 2026 NotchIslandSports"
+        alert.informativeText = "Live sports scores in your MacBook notch.\n\nAll 13 existing sports • Music • Calendar • Native Clock observation\n\nVersion 1.6 Preview (build 10)\n© 2026 NotchIslandSports"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Configure…")
@@ -263,7 +266,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: IslandSetupView(clock: clock, calendar: calendar,
-            media: media, presentation: presentation, done: { [weak self] in
+            media: media, approvals: approvals, presentation: presentation, done: { [weak self] in
                 guard self?.clock.configurationReady == true else { return }
                 UserDefaults.standard.set(true, forKey: "IslandSetupCompleted")
                 self?.setupWindow?.close()

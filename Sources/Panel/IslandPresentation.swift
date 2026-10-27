@@ -39,18 +39,20 @@ final class IslandPresentation: ObservableObject {
     var showsSecondary: Bool { !merged && secondaryFits && selection.secondary != nil }
     var showsTertiary: Bool { !merged && tertiaryFits && selection.tertiary != nil }
 
-    func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false) {
+    func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false, approval: Bool = false) {
+        let approvalStarted = !available.contains(.approval) && approval
         let musicEnded = available.contains(.music) && !music
         let musicStarted = !available.contains(.music) && music
         available = []
         if sports { available.insert(.sports) }
         if music { available.insert(.music) }
         if clock { available.insert(.clock) }
+        if approval { available.insert(.approval) }
         // Calendar availability never changes the live slots or their ordering.
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }
-        if musicStarted { setMerged(false) }
+        if musicStarted || approvalStarted { setMerged(false) }
         if musicEnded, expanded, selectedTab == .music { collapse() }
         if !expanded, selectedTab != collapsedActivity { selectedTab = collapsedActivity }
     }

@@ -22,7 +22,7 @@ import IslandCore
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
-                                  ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+                                  ("notch-approval-expanded", .approval), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
             let clock = NativeClockManager.visualFixture(paused: name == "notch-clock-paused",
                 controllable: name != "notch-clock-unavailable", count: name == "notch-clock-multiple" ? 3 : name == "notch-clock-empty" ? 0 : 1,
                 remaining: name == "notch-clock-multiple" ? 3723 : 197)
@@ -38,7 +38,7 @@ import IslandCore
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
+                contentHeight: activity == .approval ? 360 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 320,
                 expandedWidth: activity == .clock ? 440 : 600)
             let occupied = name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
             let placement = MenuBarPlacement.layout(base: geometry, screen: screen, occupied: occupied,
@@ -57,14 +57,14 @@ import IslandCore
                 Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
                     .padding(.top, canvasHeight - 30).padding(.leading, 28)
                 NotchContentView( dataManager: data, nowPlayingManager: media,
-                    clockManager: clock, calendarManager: calendar, presentation: presentation)
+                    clockManager: clock, calendarManager: calendar, approvals: ApprovalManager.visualFixture(), presentation: presentation)
                     .frame(width: primary.width, height: primary.height)
                     .position(x: primary.midX, y: screen.maxY - primary.midY)
-                if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar,
+                if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(),
                     presentation: presentation, third: false)
                     .frame(width: secondary.width, height: secondary.height)
                     .position(x: secondary.midX, y: screen.maxY - secondary.midY) }
-                if presentation.showsTertiary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar,
+                if presentation.showsTertiary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(),
                     presentation: presentation, third: true)
                     .frame(width: tertiary.width, height: tertiary.height)
                     .position(x: tertiary.midX, y: screen.maxY - tertiary.midY) }
@@ -82,7 +82,7 @@ import IslandCore
             try bitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent(name + ".png"))
         }
         let setup = NSHostingView(rootView: IslandSetupView(clock: NativeClockManager(defaults: defaults),
-            calendar: CalendarManager(defaults: defaults), media: media, presentation: IslandPresentation(defaults: defaults), done: {}).background(Color(nsColor: .windowBackgroundColor)))
+            calendar: CalendarManager(defaults: defaults), media: media, approvals: ApprovalManager(), presentation: IslandPresentation(defaults: defaults), done: {}).background(Color(nsColor: .windowBackgroundColor)))
         setup.frame = NSRect(x: 0, y: 0, width: 490, height: 600)
         let setupWindow = NSWindow(contentRect: setup.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         setupWindow.contentView = setup

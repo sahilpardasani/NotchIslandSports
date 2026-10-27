@@ -7,6 +7,7 @@ struct IslandSetupView: View {
     @ObservedObject var clock: NativeClockManager
     @ObservedObject var calendar: CalendarManager
     @ObservedObject var media: NowPlayingManager
+    @ObservedObject var approvals: ApprovalManager
     @ObservedObject var presentation: IslandPresentation
     let done: () -> Void
 
@@ -52,6 +53,18 @@ struct IslandSetupView: View {
                 Text(calendar.enabled ? calendar.status : "Read-only agenda, available by swiping. Never uses a live activity slot.")
                     .font(.caption).foregroundColor(.secondary)
                 if calendar.enabled && !calendar.hasAccess { Button("Allow Calendar…") { calendar.connect() } }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Approval requests", isOn: $approvals.enabled)
+                Text("Local Codex / ChatGPT coding sessions and Claude Code, including supported desktop Code sessions. Generic Chat, Cowork and cloud-only approvals are not connected.")
+                    .font(.caption).foregroundColor(.secondary)
+                HStack {
+                    Button("Connect Codex…") { approvals.connect(.codex) }
+                    Button("Connect Claude Code…") { approvals.connect(.claudeCode) }
+                }
+                Text(approvals.status).font(.caption).foregroundColor(.secondary)
+                Text("Connect adds a local permission hook and backs up existing settings. Requests wait up to two minutes for your choice, then return to the normal prompt. No automatic approvals.")
+                    .font(.caption).foregroundColor(.secondary)
             }
             Toggle("Separate live activities (up to three)", isOn: Binding(get: { !presentation.merged },
                 set: { presentation.setMerged(!$0) }))

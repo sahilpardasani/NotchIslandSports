@@ -1,11 +1,17 @@
-# Preview 1.6 (build 9) — native media, compact Calendar and adaptive placement
+# Preview 1.6 (build 10) — native media, compact Calendar and adaptive placement
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 9 changes (current)
+## Build 10 approvals (current)
 
-Version remains 1.6.0; bundle and About build number are 9. These changes replace build 8 behavior where noted.
+Adds local Codex and Claude Code PermissionRequest hooks, including supported desktop coding sessions, with an orange pending activity, full hook request details and Approve once / Deny / Use app prompt controls. Setup installs the helper and merges hook configuration once; Codex hook trust must still be granted in the source. Requests expire after two minutes and never auto-approve. Generic ChatGPT chat, Claude Chat/Cowork, cloud and remote approvals are not connected. See [approval setup, contracts and verification](APPROVALS.md).
+
+Bundle/About build is 10; version stays 1.6.0. Existing no-hover behavior, six top-level menu items, native Clock, Calendar, sports and media remain. The approval entry is inside Select Widget.
+
+## Build 9 changes retained
+
+These changes originated in build 9 and remain; they replace build 8 behavior where noted.
 
 - Spotify (`com.spotify.client`) and Apple Music (`com.apple.Music`) use the shared event-driven Now Playing feed for title, artwork, progress, pause state and split presence. No browser tab is required. Both apps share one media slot: macOS selects the current player. Playing creates an activity; pausing the observed session retains controls; source withdrawal or quitting removes it. Cached paused metadata at startup does not create an activity.
 - If a system transport command fails for either native player, a fixed AppleScript command targets that exact app only after checking the displayed title, bundle ID, current system player and running PID again. Play/pause, previous/next and ±15-second seek are covered. Automation consent may be requested on first fallback use. Browser failures never fall through to Music or Spotify. Detection still depends on experimental/private MediaRemote; native fallback is transport only, not an independent discovery API. Native app playback has not been verified end-to-end here.

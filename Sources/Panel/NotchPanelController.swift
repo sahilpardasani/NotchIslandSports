@@ -17,6 +17,7 @@ final class NotchPanelController {
     private let dataManager: SportsDataManager
     private let media: NowPlayingManager
     private let calendar: CalendarManager
+    private let approvals: ApprovalManager
     private let clock: NativeClockManager
     let presentation: IslandPresentation
     private var cancellables = Set<AnyCancellable>()
@@ -34,9 +35,9 @@ final class NotchPanelController {
     private var selectedDisplayID: CGDirectDisplayID?
 
     init(dataManager: SportsDataManager, media: NowPlayingManager,
-         clock: NativeClockManager, calendar: CalendarManager, presentation: IslandPresentation) {
+         clock: NativeClockManager, calendar: CalendarManager, approvals: ApprovalManager, presentation: IslandPresentation) {
         self.dataManager = dataManager; self.media = media
-        self.clock = clock; self.calendar = calendar; self.presentation = presentation
+        self.clock = clock; self.calendar = calendar; self.approvals = approvals; self.presentation = presentation
     }
 
     func setupPanel() {
@@ -44,13 +45,13 @@ final class NotchPanelController {
         secondaryPanel = makePanel()
         tertiaryPanel = makePanel()
         let primary = IslandGestureHostingView(rootView: NotchContentView(
-            dataManager: dataManager, nowPlayingManager: media, clockManager: clock, calendarManager: calendar, presentation: presentation))
+            dataManager: dataManager, nowPlayingManager: media, clockManager: clock, calendarManager: calendar, approvals: approvals, presentation: presentation))
         primary.onScrollPull = { [weak self] in self?.presentation.pullDown() }
         primary.onScrollPush = { [weak self] in self?.presentation.collapse() }
         primary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held) }
         panel.contentView = primary
         let secondary = IslandGestureHostingView(rootView: SecondaryActivityView(
-            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: false))
+            dataManager: dataManager, media: media, clock: clock, calendar: calendar, approvals: approvals, presentation: presentation, third: false))
         secondary.onScrollPull = { [weak self] in
             guard let self, let activity = self.presentation.selection.secondary else { return }
             self.presentation.open(activity)
@@ -59,7 +60,7 @@ final class NotchPanelController {
         secondary.onHorizontalSwipe = { [weak self] forward, held in self?.scrollSideways(forward: forward, held: held, satelliteLeft: self?.presentation.secondaryOnLeft) }
         secondaryPanel.contentView = secondary
         let tertiary = IslandGestureHostingView(rootView: SecondaryActivityView(
-            dataManager: dataManager, media: media, clock: clock, calendar: calendar, presentation: presentation, third: true))
+            dataManager: dataManager, media: media, clock: clock, calendar: calendar, approvals: approvals, presentation: presentation, third: true))
         tertiary.onScrollPull = { [weak self] in
             guard let self, let activity = self.presentation.selection.tertiary else { return }
             self.presentation.open(activity)
@@ -100,6 +101,7 @@ final class NotchPanelController {
     }
 
     private func observe() {
+        approvals.$requests.map { !$0.isEmpty }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         dataManager.$activeMatch.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             self?.queueUpdate()
         }.store(in: &cancellables)
@@ -140,7 +142,7 @@ final class NotchPanelController {
 
     private func refreshActivities() {
         presentation.update(sports: dataManager.activeMatch != nil,
-                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil)
+                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil, approval: !approvals.requests.isEmpty)
     }
 
     func repositionForScreen() {
@@ -165,6 +167,7 @@ final class NotchPanelController {
     }
 
     private var expandedHeight: CGFloat {
+        if presentation.selectedTab == .approval { return 360 }
         if presentation.selectedTab == .calendar { return 420 }
         if presentation.selectedTab == .clock { return NativeClockView.contentHeight(timerCount: clock.timers.count) }
         if presentation.selectedTab == .music {
@@ -308,6 +311,7 @@ struct SecondaryActivityView: View {
     @ObservedObject var media: NowPlayingManager
     @ObservedObject var clock: NativeClockManager
     @ObservedObject var calendar: CalendarManager
+    @ObservedObject var approvals: ApprovalManager
     @ObservedObject var presentation: IslandPresentation
     var third: Bool
     private var activity: IslandActivity? { third ? presentation.selection.tertiary : presentation.selection.secondary }
@@ -327,6 +331,7 @@ struct SecondaryActivityView: View {
                                 reduceMotion: presentation.reduceMotion, lowPower: presentation.lowPower))
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
+                case .approval: ApprovalCompactView(manager: approvals, minimal: true)
                 case .calendar: EmptyView() // Calendar never occupies a live slot.
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
                 case .sports:

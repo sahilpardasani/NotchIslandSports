@@ -1,7 +1,7 @@
 import Foundation
 
 public enum IslandActivity: String, CaseIterable, Codable, Sendable {
-    case sports, music, clock, calendar
+    case sports, music, clock, calendar, approval
 
     /// Calendar is a browse page, never a live split activity.
     public var occupiesLiveSlot: Bool { self != .calendar }
@@ -22,6 +22,11 @@ public struct ActivitySelection: Equatable, Sendable {
         if let preferred, available.contains(preferred) { ordered.append(preferred) }
         for activity in existing + IslandActivity.allCases where available.contains(activity) {
             if !ordered.contains(activity) { ordered.append(activity) }
+        }
+        // Pending attention uses a satellite without stealing the primary under review.
+        if available.contains(.approval), ordered.first != .approval {
+            ordered.removeAll { $0 == .approval }
+            ordered.insert(.approval, at: min(1, ordered.count))
         }
         primary = ordered.first
         secondary = ordered.dropFirst().first

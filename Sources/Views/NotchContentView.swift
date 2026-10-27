@@ -90,6 +90,7 @@ struct NotchContentView: View {
     @ObservedObject var nowPlayingManager: NowPlayingManager
     @ObservedObject var clockManager: NativeClockManager
     @ObservedObject var calendarManager: CalendarManager
+    @ObservedObject var approvals: ApprovalManager
     @ObservedObject var presentation: IslandPresentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -171,6 +172,7 @@ struct NotchContentView: View {
             }
         case .calendar: NativeCalendarView(manager: calendarManager)
         case .clock: NativeClockView(manager: clockManager)
+        case .approval: ApprovalExpandedView(manager: approvals)
         }
     }
 
@@ -197,6 +199,10 @@ struct NotchContentView: View {
         case .sports: CollapsedScoreView(dataManager: dataManager)
         case .music: cameraSafeCompact(.music)
         case .calendar: cameraSafeCompact(.calendar)
+        case .approval:
+            NotchEars(gap: dataManager.notchWidth) { ApprovalCompactView(manager: approvals) } right: {
+                Text(approvals.requests.first?.provider.label ?? "Approvals").font(.system(size: 10)).foregroundColor(.orange)
+            }
         case .clock: cameraSafeCompact(.clock)
         }
     }

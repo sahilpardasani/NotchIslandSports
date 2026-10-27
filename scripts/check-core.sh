@@ -17,4 +17,6 @@ xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-
 build/clock-detail-checks
 xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules scripts/check-media.swift build/check-modules/IslandCore.o -o build/media-checks
 build/media-checks
+xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules Sources/Services/ApprovalServer.swift scripts/check-approvals.swift build/check-modules/IslandCore.o -o build/approval-checks
+build/approval-checks
 python3 scripts/check-no-hover.py

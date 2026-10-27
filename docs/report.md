@@ -1,6 +1,6 @@
 > **1.5 update:** [Restored UI and timer controls](TIMER-UI-RESTORATION.md) is the current UI/Clock behavior. Headerless scorecards, bottom handle, compact countdown with circular native buttons; setup stays in the menu bar.
 
-> **Current preview:** [Version 1.6 build 9](PREVIEW-1.6.md) supersedes historical interaction/setup descriptions below. Calendar is a compact swipe page, native Music/Spotify share the system media activity, and inward satellite swipes merge. See that document for implemented scope and live-test limitations.
+> **Current preview:** [Version 1.6 build 10](PREVIEW-1.6.md) supersedes historical interaction/setup descriptions below. Calendar is a compact swipe page, native Music/Spotify share the system media activity, and inward satellite swipes merge. Local permission-hook approvals are implemented with explicit user decisions; generic desktop chat approvals remain unavailable. See [APPROVALS.md](APPROVALS.md) and the preview notes for exact coverage and live-test limitations.
 
 > **Current 1.4 behavior:** [Interaction update](INTERACTION-UPDATE.md) supersedes older Calendar-slot/tab-bar instructions below. Three live slots are reserved for sports, music and native Clock; Calendar is swipe-only. Setup is in the menu bar. Hold-and-swipe merges. The compact strip fits the camera band. Approval/delivery integrations remain unimplemented; the update documents supported hook research.
 
@@ -520,3 +520,8 @@ Expanded media content now uses 180 points instead of 220 (206 when a connection
 ### Version 1.6 build 9 follow-up
 
 Implemented compact Calendar paging without event mutation or slot consumption; inward satellite merge gestures; bounded event-driven menu geometry and conservative fallback placement; curved media controls surface; circular missing-artwork placeholder; explicit Music/Spotify native command routing with fallback after system transport failure. All existing sports/details and native Clock policies remain. See PREVIEW-1.6.md for acceptance checks, privacy boundaries and measured-vs-unverified distinctions. Native media discovery remains private MediaRemote, not a public Apple Music/Spotify discovery API. The physical notch's viewing-angle reflections cannot be fixed in software. Status-item geometry may be unavailable, so menu avoidance is best effort, especially on unusual display arrangements. No live native-player compatibility or battery savings are asserted.
+
+
+### Version 1.6 build 10 approval follow-up
+
+The user explicitly requested direct one-request approval from the notch, superseding the notification-only first-stage restriction in section 6.4. The implemented path uses documented synchronous PermissionRequest response contracts, never a scraped button or generic notification. An authenticated local IPC helper waits for an explicit user choice, then returns allow/deny for that exact request only. No automatic decisions, rewritten input or permanent permissions are returned. Full request details, queue handling, configuration merge/backups, cancellation/expiry and source coverage are specified in APPROVALS.md. Generic ChatGPT chat and Claude Chat/Cowork remain unconnected; hook support for local coding sessions must not be generalized to them.
