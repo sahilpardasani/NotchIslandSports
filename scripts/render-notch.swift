@@ -19,7 +19,7 @@ import IslandCore
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-browse", nil), ("notch-media-tucked", nil), ("notch-sports-stays-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
-                                  ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
+                                  ("notch-delivery-expanded", .delivery), ("notch-delivery-compact", nil), ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
                                   ("notch-approval-expanded", .approval), ("notch-chatgpt-approval", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-score-expanded", .sports), ("notch-merged", nil)] {
@@ -32,6 +32,7 @@ import IslandCore
                 cover.unlockFocus()
                 media.setArtworkFixture(cover)
             } else { media.setArtworkFixture(nil) }
+            let deliveryPreview = name.hasPrefix("notch-delivery-")
             let approvalCrowded = name == "notch-approval-crowded"
             let scoreRegression = name.hasPrefix("notch-score-")
             data.activeMatch = scoreRegression ? .cricket(CricketMatch(id: "layout-regression", status: .unknown,
@@ -43,8 +44,9 @@ import IslandCore
                 remaining: name == "notch-clock-multiple" ? 3723 : 197)
             let presentation = IslandPresentation(defaults: defaults)
             presentation.cameraHeight = 32
-            presentation.update(sports: true, music: true, clock: true, calendar: true, approval: approvalCrowded)
+            presentation.update(sports: true, music: true, clock: true, calendar: true, approval: approvalCrowded, delivery: deliveryPreview)
             if let activity { presentation.open(activity) }
+            if name == "notch-delivery-compact" { presentation.cyclePrimary(forward: false) }
             if name == "notch-media-browse" || name == "notch-media-tucked" {
                 presentation.cyclePrimary()
                 if name == "notch-media-tucked" { presentation.toggleSplitGesture() }
@@ -57,7 +59,7 @@ import IslandCore
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .approval ? 114 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 284)
+                contentHeight: activity == .delivery ? 137 : activity == .approval ? 114 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 284)
             let occupied = approvalCrowded ? [CGRect(x: 0, y: 768, width: 1200, height: 32)] : scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
                 CGRect(x: 960, y: 740, width: 240, height: 60)]
                 : name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
@@ -76,7 +78,7 @@ import IslandCore
                 Text("SYNTHETIC PREVIEW · ACTUAL APP VIEWS").font(.system(size: 12)).foregroundColor(.white.opacity(0.25))
                     .padding(.top, canvasHeight - 30).padding(.leading, 28)
                 NotchContentView( dataManager: data, nowPlayingManager: media,
-                    clockManager: clock, calendarManager: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"), presentation: presentation)
+                    clockManager: clock, calendarManager: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"), deliveries: DeliveryManager.visualFixture(), presentation: presentation)
                     .frame(width: primary.width, height: primary.height)
                     .position(x: primary.midX, y: screen.maxY - primary.midY)
                 if presentation.showsSecondary { SecondaryActivityView(dataManager: data, media: media, clock: clock, calendar: calendar, approvals: ApprovalManager.visualFixture(github: name == "notch-chatgpt-approval"),

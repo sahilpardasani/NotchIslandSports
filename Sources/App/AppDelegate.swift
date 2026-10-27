@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
     private let clock = NativeClockManager()
     private let calendar = CalendarManager()
     private let approvals = ApprovalManager()
+    private let deliveries = DeliveryManager.shared
     private let presentation = IslandPresentation()
     private var setupWindow: NSWindow?
     private var systemSleeping = false
@@ -61,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         let widgets = NSMenu()
         let widgetItem = NSMenuItem(title: "Select Widget", action: nil, keyEquivalent: "")
         widgetItem.submenu = widgets
-        for (title, activity) in [("Sports", IslandActivity.sports), ("Music", .music), ("Apple Clock", .clock), ("Calendar Agenda", .calendar), ("Approvals", .approval)] {
+        for (title, activity) in [("Sports", IslandActivity.sports), ("Music", .music), ("Apple Clock", .clock), ("Calendar Agenda", .calendar), ("Approvals", .approval), ("Deliveries", .delivery)] {
             let value = NSMenuItem(title: title, action: #selector(selectWidget(_:)), keyEquivalent: "")
             value.target = self
             value.representedObject = activity.rawValue
@@ -129,6 +130,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         clock.start()
         calendar.start()
         approvals.start()
+        deliveries.start()
         panelController.show()
     }
 
@@ -140,6 +142,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
         clock.stop()
         calendar.stop()
         approvals.stop()
+        deliveries.stop()
         panelController?.hide()
     }
 
@@ -148,6 +151,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSWind
             ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical
         media.setLowPower(presentation.lowPower)
         clock.setLowPower(presentation.lowPower)
+        deliveries.setLowPower(presentation.lowPower)
         presentation.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         dataManager.setPresentation(expanded: presentation.expanded && presentation.selectedTab == .sports,
                                     lowPower: presentation.lowPower)

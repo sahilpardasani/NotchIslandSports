@@ -25,11 +25,13 @@ final class ApprovalServer {
     }
     func start() { queue.async { [weak self] in self?.listen() } }
     func stop() { queue.async { [weak self] in self?.shutdown() } }
-    func decide(_ id: UUID, _ decision: ApprovalDecision) {
+    func decide(_ id: UUID, _ decision: ApprovalDecision, completion: ((Bool) -> Void)? = nil) {
         queue.async { [weak self] in
             guard let self, let pair = self.peers.first(where: { $0.value.request?.id == id }),
-                  let request = pair.value.request else { return }
-            self.finish(pair.key, decision: request.expires > Date() ? decision : .passthrough)
+                  let request = pair.value.request else { completion?(false); return }
+            let actual = request.expires > Date() ? decision : .passthrough
+            let sent = self.finish(pair.key, decision: actual)
+            completion?(sent && actual == decision)
         }
     }
     private func listen() {
@@ -104,15 +106,17 @@ final class ApprovalServer {
         queue.asyncAfter(deadline: .now() + max(0, request.expires.timeIntervalSinceNow), execute: timeout)
         onRequest?(request)
     }
-    private func finish(_ fd: Int32, decision: ApprovalDecision) {
-        guard let peer = peers.removeValue(forKey: fd) else { return }
+    @discardableResult private func finish(_ fd: Int32, decision: ApprovalDecision) -> Bool {
+        guard let peer = peers.removeValue(forKey: fd) else { return false }
+        var sent = false
         peer.timeout?.cancel()
         if let request = peer.request {
             // Tiny nonblocking response; a failed/disconnected write never implies approval.
-            _ = ApprovalSocket.send(ApprovalRequest.response(id: request.id, decision: decision), to: fd)
+            sent = ApprovalSocket.send(ApprovalRequest.response(id: request.id, decision: decision), to: fd)
             onRemoval?(request.id)
         }
         peer.source.cancel()
+        return sent
     }
     private func shutdown() {
         for fd in Array(peers.keys) { finish(fd, decision: .passthrough) }

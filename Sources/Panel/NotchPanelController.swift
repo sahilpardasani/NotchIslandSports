@@ -18,6 +18,7 @@ final class NotchPanelController {
     private let media: NowPlayingManager
     private let calendar: CalendarManager
     private let approvals: ApprovalManager
+    private let deliveries = DeliveryManager.shared
     private let clock: NativeClockManager
     let presentation: IslandPresentation
     private var cancellables = Set<AnyCancellable>()
@@ -101,6 +102,7 @@ final class NotchPanelController {
     }
 
     private func observe() {
+        deliveries.$orders.map { $0.map(\.id) }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         approvals.$requests.map { $0.count }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         dataManager.$activeMatch.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             self?.queueUpdate()
@@ -142,7 +144,7 @@ final class NotchPanelController {
 
     private func refreshActivities() {
         presentation.update(sports: dataManager.activeMatch != nil,
-                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil, approval: !approvals.requests.isEmpty)
+                            music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil, approval: !approvals.requests.isEmpty, delivery: !deliveries.orders.isEmpty)
         presentation.observeClock(clock.timers.map { ClockPlaybackState(id: $0.id, paused: $0.paused) },
                                   fresh: clock.observedAt != nil)
     }
@@ -169,6 +171,7 @@ final class NotchPanelController {
     }
 
     private var expandedHeight: CGFloat {
+        if presentation.selectedTab == .delivery { return min(330, CGFloat(max(1, deliveries.orders.count)) * 105 + 32) }
         if presentation.selectedTab == .approval { return approvals.requests.count > 1 ? 146 : 114 }
         if presentation.selectedTab == .calendar { return 420 }
         if presentation.selectedTab == .clock { return NativeClockView.contentHeight(timerCount: clock.timers.count) }
@@ -330,6 +333,7 @@ struct SecondaryActivityView: View {
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
                 case .approval: EmptyView() // Approvals use the main attention page.
+                case .delivery: EmptyView() // Deliveries are a swipe page; sports retains the main slot.
                 case .calendar: EmptyView() // Calendar never occupies a live slot.
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
                 case .sports: EmptyView() // Sports always stays in the main island.

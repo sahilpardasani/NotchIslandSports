@@ -1,7 +1,7 @@
 import Foundation
 
 public enum IslandActivity: String, CaseIterable, Codable, Sendable {
-    case sports, music, clock, calendar, approval
+    case sports, music, clock, calendar, approval, delivery
 
     /// Calendar is a browse page; approvals use a temporary attention page.
     public var occupiesLiveSlot: Bool { self == .sports || self == .music || self == .clock }

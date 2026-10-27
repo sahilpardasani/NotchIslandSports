@@ -8,6 +8,7 @@ struct IslandSetupView: View {
     @ObservedObject var calendar: CalendarManager
     @ObservedObject var media: NowPlayingManager
     @ObservedObject var approvals: ApprovalManager
+    @ObservedObject var deliveries: DeliveryManager = .shared
     @ObservedObject var presentation: IslandPresentation
     let done: () -> Void
 
@@ -66,6 +67,7 @@ struct IslandSetupView: View {
                 Text("Connect adds a local permission hook and backs up existing settings. Requests wait up to two minutes for your choice, then return to the normal prompt. No automatic approvals.")
                     .font(.caption).foregroundColor(.secondary)
             }
+            DeliverySetupView(manager: deliveries)
             Toggle("Separate live activities (up to three)", isOn: Binding(get: { !presentation.merged },
                 set: { presentation.setMerged(!$0) }))
             Text("Hold and swipe sideways to merge or separate them.").font(.caption).foregroundColor(.secondary)

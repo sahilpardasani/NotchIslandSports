@@ -44,10 +44,12 @@ import IslandCore
         }
         server.start()
     }
-    func decide(_ id: UUID, _ decision: ApprovalDecision) {
-        guard active, enabled, let request = requests.first(where: { $0.id == id }), request.expires > Date() else { return }
+    func decide(_ id: UUID, _ decision: ApprovalDecision, completion: ((Bool) -> Void)? = nil) {
+        guard active, enabled, let request = requests.first(where: { $0.id == id }), request.expires > Date() else { completion?(false); return }
         // Server checks the same ID and deadline against its still-open connection.
-        server.decide(id, decision)
+        server.decide(id, decision) { sent in
+            Task { @MainActor in completion?(sent) }
+        }
     }
     func connect(_ provider: ApprovalProvider) {
         do {

@@ -91,6 +91,7 @@ struct NotchContentView: View {
     @ObservedObject var clockManager: NativeClockManager
     @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var approvals: ApprovalManager
+    @ObservedObject var deliveries: DeliveryManager = .shared
     @ObservedObject var presentation: IslandPresentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
@@ -174,7 +175,8 @@ struct NotchContentView: View {
             }
         case .calendar: NativeCalendarView(manager: calendarManager)
         case .clock: NativeClockView(manager: clockManager)
-        case .approval: ApprovalExpandedView(manager: approvals)
+        case .approval: ApprovalExpandedView(manager: approvals, presentation: presentation)
+        case .delivery: DeliveryExpandedView(manager: deliveries)
         }
     }
 
@@ -203,6 +205,16 @@ struct NotchContentView: View {
         case .approval:
             NotchEars(gap: dataManager.notchWidth) { ApprovalCompactView(manager: approvals) } right: {
                 Text(approvals.requests.first?.provider.label ?? "Approvals").font(.system(size: 10)).foregroundColor(.orange)
+            }
+        case .delivery:
+            NotchEars(gap: dataManager.hasNotch ? dataManager.notchWidth + 12 : 20) {
+                HStack(spacing: 5) {
+                    Image(systemName: "takeoutbag.and.cup.and.straw.fill").foregroundColor(.orange)
+                    Text(deliveries.orders.first?.restaurant ?? "Swiggy").font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                }
+            } right: {
+                Text(deliveries.orders.first?.eta ?? deliveries.orders.first?.status ?? "No active orders")
+                    .font(.system(size: 11, weight: .semibold)).foregroundColor(.orange).lineLimit(1)
             }
         case .clock: cameraSafeCompact(.clock)
         }

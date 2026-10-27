@@ -32,3 +32,7 @@ Clock is an experimental Accessibility adapter. Where native notifications are u
 Local builds and synthetic tests cannot establish device battery drain. For a controlled comparison, use the same Mac, brightness, power mode and media/sports state, allow launch work to settle, then compare build 11 and 12 over identical 15-minute idle, playing-collapsed, expanded and Clock scenarios. Observe CPU and Energy Impact for NotchIslandSports **and** its media helper; record network activity and wakeups with Instruments when available. Exclude compilation and unrelated browser changes. Do not infer a battery-life percentage from scheduled poll counts or a short Activity Monitor sample.
 
 The nominal background sports sweep count drops from 12 to 4 per hour in normal mode, excluding startup and explicit refreshes. With Clock closed its periodic 240 checks/hour become zero. These are policy counts, not measured energy savings.
+
+## Swiggy tracking (build 20)
+
+Disconnected delivery tracking schedules no requests. After sign-in, active orders are discovered once per minute; empty discovery slows to five minutes in Low Power Mode. Each order's status respects Swiggy's polling hint (minimum 15 seconds), terminal state, rate limits, and failure backoff. Stale estimate expiry uses the same sleeping task and no extra network request. Sleep/session lock stops delivery tasks. Sports retain their separate ten-second selected-live cadence. No battery-life saving is claimed from these policies.

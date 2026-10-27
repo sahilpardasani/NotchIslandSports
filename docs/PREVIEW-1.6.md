@@ -1,9 +1,17 @@
-# Preview 1.6 (build 19) — Stable layout, media seeking and score refresh
+# Preview 1.6 (build 20) — Swiggy tracking and approval auto-collapse
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 19 fixed expansion footprint and native Resume (current)
+## Build 20 (current)
+
+Swiggy Food now has a read-only browser sign-in, Keychain-backed connection, active-order discovery and provider-paced ETA/status updates. Swipe to Deliveries and pull down for details; sports keeps its full slot and media/Clock keep their companions. Setup lives in About → Configure. See [delivery setup and provider findings](DELIVERIES.md) for account verification and production-access limits.
+
+Approving or denying a request in the notch now collapses that approval panel only after the decision was successfully written to the waiting local hook. Failed/missing/expired requests, Use app prompt, and a different expanded page do not trigger auto-collapse. The existing native Clock Resume behavior remains.
+
+Validation: 621 checks passed, including real local approval IPC, the real OAuth loopback callback, synthetic HTTP/JSON/SSE and token rotation, delivery lifecycle, and all existing sports/media/geometry checks. Release 1.6.0 build 20 compiled locally. Actual signed-in Swiggy account/OTP/order round-trip remains unverified; public OAuth metadata and client registration were verified, with registration returning HTTP 201.
+
+## Build 19 fixed expansion footprint and native Resume
 
 Opening a scorecard, media controls, Clock, Calendar or an approval keeps the main island's collapsed width and top anchor; it expands downward. Companion pills keep their exact positions and sizes, including when menu crowding places both on one side. Long cricket scores scale within the narrower header. Plain displays use a consistent 352-point width in both states.
 

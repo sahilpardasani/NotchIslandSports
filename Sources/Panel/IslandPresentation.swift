@@ -8,12 +8,14 @@ final class IslandPresentation: ObservableObject {
     @Published private(set) var merged: Bool
     @Published private(set) var compactCalendar = false
     @Published private(set) var compactMedia = false
+    @Published private(set) var compactDelivery = false
     var collapsedActivity: IslandActivity {
         // Pending approvals remain visible without creating a split pill or
         // demoting sports. The selected sports page returns when they clear.
         if available.contains(.approval) { return .approval }
+        if compactDelivery && available.contains(.delivery) { return .delivery }
         if compactMedia && available.contains(.music) { return .music }
-        return compactCalendar ? .calendar : (selection.primary ?? .sports)
+        return compactCalendar ? .calendar : (selection.primary ?? (available.contains(.delivery) ? .delivery : .sports))
     }
     @Published var secondaryOnLeft = true
     @Published var tertiaryOnLeft = false
@@ -52,7 +54,7 @@ final class IslandPresentation: ObservableObject {
     var showsTertiary: Bool { !merged && tertiaryFits && companionVisible(selection.tertiary) }
 
 
-    func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false, approval: Bool = false) {
+    func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false, approval: Bool = false, delivery: Bool = false) {
         let clockStarted = !available.contains(.clock) && clock
         let musicEnded = available.contains(.music) && !music
         let musicStarted = !available.contains(.music) && music
@@ -61,12 +63,14 @@ final class IslandPresentation: ObservableObject {
         if music { nextAvailable.insert(.music) }
         if clock { nextAvailable.insert(.clock) }
         if approval { nextAvailable.insert(.approval) }
+        if delivery { nextAvailable.insert(.delivery) }
         if available != nextAvailable { available = nextAvailable }
         // Calendar availability never changes the live slots or their ordering.
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }
         if musicStarted || clockStarted { setMerged(false) }
+        if !delivery && compactDelivery { compactDelivery = false }
         if musicEnded && compactMedia { compactMedia = false }
         if musicEnded, expanded, selectedTab == .music { collapse() }
         if !expanded, selectedTab != collapsedActivity { selectedTab = collapsedActivity }
@@ -86,6 +90,7 @@ final class IslandPresentation: ObservableObject {
     }
 
     func open(_ activity: IslandActivity, pin: Bool = true) {
+        if compactDelivery != (activity == .delivery) { compactDelivery = activity == .delivery }
         if compactCalendar != (activity == .calendar) { compactCalendar = activity == .calendar }
         if activity != .music && compactMedia { compactMedia = false }
         if selectedTab != activity { selectedTab = activity }
@@ -102,7 +107,7 @@ final class IslandPresentation: ObservableObject {
     /// Explicit sport selection leaves a media/calendar browse page without
     /// changing whether the island is expanded or merging companion activities.
     func showSelectedSport() {
-        compactMedia = false; compactCalendar = false
+        compactMedia = false; compactCalendar = false; compactDelivery = false
         if selectedTab != .sports { selectedTab = .sports }
         if expanded { closingTab = nil }
     }
@@ -110,7 +115,7 @@ final class IslandPresentation: ObservableObject {
     func cyclePrimary(forward: Bool = true) {
         let pages = IslandActivity.allCases.filter { activity in
             if !expanded && available.contains(.sports) {
-                return activity == .sports || activity == .calendar || (activity == .music && available.contains(.music)) || (activity == .approval && available.contains(.approval))
+                return activity == .sports || activity == .calendar || (activity == .music && available.contains(.music)) || (activity == .approval && available.contains(.approval)) || (activity == .delivery && available.contains(.delivery))
             }
             return available.contains(activity) || activity == .calendar
         }
@@ -121,6 +126,7 @@ final class IslandPresentation: ObservableObject {
         if expanded { open(activity) }
         else {
             if compactCalendar != (activity == .calendar) { compactCalendar = activity == .calendar }
+            if compactDelivery != (activity == .delivery) { compactDelivery = activity == .delivery }
             if compactMedia != (activity == .music) { compactMedia = activity == .music }
             var next = selection
             next.update(available: available, preferred: activity)
@@ -136,8 +142,8 @@ final class IslandPresentation: ObservableObject {
     /// A held swipe from the media browse page tucks media back into its pill.
     /// Otherwise retain the existing merge/restore toggle.
     func toggleSplitGesture() {
-        if compactMedia && available.contains(.sports) {
-            compactMedia = false; compactCalendar = false
+        if (compactMedia || compactDelivery) && available.contains(.sports) {
+            compactMedia = false; compactCalendar = false; compactDelivery = false
             setMerged(false); collapse()
         } else { setMerged(!merged); collapse() }
     }
@@ -150,6 +156,10 @@ final class IslandPresentation: ObservableObject {
         } else if !held, abs(vertical) > abs(horizontal), abs(vertical) > 18 {
             if vertical > 0 { pullDown() } else { collapse() }
         }
+    }
+    func finishApprovalDecision(_ decision: ApprovalDecision, sent: Bool) {
+        guard sent, decision == .allow || decision == .deny, expanded, selectedTab == .approval else { return }
+        collapse()
     }
     func collapse() {
         if pinned { pinned = false }

@@ -1,6 +1,6 @@
 # Maps and iPhone Live Activities — integration status
 
-Checked October 27, 2026. NotchIslandSports 1.6 build 18 adds Clock-reader recovery and visible island outlines. It does **not** import Apple Maps, Google Maps or third-party iPhone Live Activities into its custom panels.
+Checked October 27, 2026. **Build 20 adds a separate authenticated Swiggy Food tracking connection; see [Deliveries](DELIVERIES.md). It does not read third-party iPhone ActivityKit payloads.** NotchIslandSports 1.6 build 18 adds Clock-reader recovery and visible island outlines. It does **not** import Apple Maps, Google Maps or third-party iPhone Live Activities into its custom panels.
 
 ## What works through macOS
 

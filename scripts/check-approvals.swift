@@ -127,11 +127,17 @@ import IslandCore
         print("Synthetic local socket delivery: \(Int((ProcessInfo.processInfo.systemUptime - sentAt) * 1000)) ms (excludes source scheduling and display).")
         var pollState = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
         check(poll(&pollState, 1, 30) == 0, "Pending socket never automatically approves")
-        server.decide(UUID(), .allow)
+        let invalidDecision = DispatchSemaphore(value: 0)
+        var invalidAccepted = true
+        server.decide(UUID(), .allow) { invalidAccepted = $0; invalidDecision.signal() }
+        check(invalidDecision.wait(timeout: .now() + 1) == .success && !invalidAccepted, "Missing request reports failure to auto-collapse handler")
         check(poll(&pollState, 1, 30) == 0, "Stale user action cannot affect live request")
-        server.decide(liveID, .allow)
+        let decisionCompleted = DispatchSemaphore(value: 0)
+        var delivered = false
+        server.decide(liveID, .allow) { delivered = $0; decisionCompleted.signal() }
         let response = ApprovalSocket.readLine(fd, timeout: 2, maximum: 4096)!
         check(ApprovalRequest.hookOutput(response, expectedID: liveID) != nil, "Explicit exact-ID decision returns on the waiting connection")
+        check(decisionCompleted.wait(timeout: .now() + 1) == .success && delivered, "Written decision reports success to auto-collapse handler")
         close(fd)
         let replay = connect()
         _ = ApprovalSocket.send(try packet(config["token"]!, id: liveID, created: Date()), to: replay)

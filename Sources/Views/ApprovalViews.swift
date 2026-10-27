@@ -15,6 +15,7 @@ struct ApprovalCompactView: View {
 }
 struct ApprovalExpandedView: View {
     @ObservedObject var manager: ApprovalManager
+    @ObservedObject var presentation: IslandPresentation
     @State private var selected: UUID?
     @State private var submitting: UUID?
     @State private var detailsVisible = false
@@ -74,6 +75,10 @@ struct ApprovalExpandedView: View {
         guard submitting != request.id else { return }
         selected = request.id
         submitting = request.id
-        manager.decide(request.id, decision)
+        manager.decide(request.id, decision) { sent in
+            guard selected == request.id else { return }
+            submitting = nil
+            presentation.finishApprovalDecision(decision, sent: sent)
+        }
     }
 }

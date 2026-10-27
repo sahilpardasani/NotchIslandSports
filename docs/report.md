@@ -539,3 +539,7 @@ Implemented lower background catalog frequency, warm-resume reuse, idle Clock ti
 ## Media and approval follow-up — build 13
 
 Untitled, source-reported playback can create a slot while metadata loads, with controls guarded until source/title verification is possible. The shared system feed is app-agnostic; private browsing and streaming visibility remain dependent on the source and DRM behavior. Media event coalescing and failure recovery are faster without new idle polling. Approvals now show a single action line with on-demand full details and parse the complete stdin JSON object instead of a line. See PREVIEW-1.6.md and APPROVALS.md for scope and validation limits.
+
+## Version 1.6 build 20
+
+Added authenticated, read-only Swiggy Food delivery tracking with a swipe page and compact ETA, plus successful approve/deny auto-collapse limited to the approval panel. See [Deliveries](DELIVERIES.md) and [current preview notes](PREVIEW-1.6.md) for exact scope and verification. DoorDash private-beta CLI, Zomato MCP eligibility, and Uber partner access were researched; these are not advertised as working integrations.
