@@ -61,6 +61,7 @@ final class NowPlayingManager: ObservableObject {
     private let adapter = SystemMediaAdapter()
     private var adapterRetry: DispatchWorkItem?
     private var timer: Timer?
+    private var lowPower = false
     private var mediaRemoteBundle: CFBundle?
     private var getNowPlayingInfoFunc: (@convention(c) (DispatchQueue, @escaping ([String: Any]?) -> Void) -> Void)?
     
@@ -138,11 +139,17 @@ final class NowPlayingManager: ObservableObject {
         commandProcess?.terminate(); commandProcess = nil
     }
 
+    func setLowPower(_ value: Bool) {
+        guard lowPower != value else { return }
+        lowPower = value
+        if !adapter.available && requestID == nil { scheduleNext() }
+    }
+
     private func scheduleNext() {
         guard isActive, enabled else { return }
         timer?.invalidate()
         let base: TimeInterval = currentTrack == nil ? 30 : (currentTrack?.isPlaying == true ? 5 : 15)
-        let interval = base * (ProcessInfo.processInfo.isLowPowerModeEnabled ? 2 : 1)
+        let interval = base * (lowPower ? 2 : 1)
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.updateNowPlayingInfo() }
         }
@@ -186,7 +193,7 @@ final class NowPlayingManager: ObservableObject {
                     self.artworkImage = artwork.flatMap(NSImage.init(data:))
                     self.lastColor = self.artworkImage.flatMap { self.extractDominantColor(from: $0) } ?? Color(hex: "A855F7")
                 }
-                self.positionAnchor = PlaybackAnchor(position: position,
+                let anchor = PlaybackAnchor(position: position,
                     instant: ProcessInfo.processInfo.systemUptime, rate: rate, duration: duration)
                 let track = NowPlayingTrack(title: title,
                     artist: info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? "Unknown Artist",
@@ -197,7 +204,7 @@ final class NowPlayingManager: ObservableObject {
                 guard self.sessionPresence.update(bundleID: track.sourceBundleID, title: track.title, playing: track.isPlaying) else {
                     self.clearSession(); return
                 }
-                if self.currentTrack != track { self.currentTrack = track }
+                self.publish(track, anchor: anchor)
             }
         }
         if let getPID { getPID(DispatchQueue.main, fetch) } else { fetch(0) }
@@ -209,19 +216,32 @@ final class NowPlayingManager: ObservableObject {
               !NSRunningApplication.runningApplications(withBundleIdentifier: snapshot.bundleID).isEmpty,
               sessionPresence.update(bundleID: snapshot.bundleID, title: snapshot.title, playing: snapshot.playing)
         else { clearSession(); return }
-        controlError = nil
+        if controlError != nil { controlError = nil }
         if snapshot.artwork != lastArtwork {
             lastArtwork = snapshot.artwork
             artworkImage = snapshot.artwork.flatMap(NSImage.init(data:))
             lastColor = artworkImage.flatMap { extractDominantColor(from: $0) } ?? Color(hex: "A855F7")
         }
         let position = snapshot.position(now: Date().timeIntervalSince1970)
-        positionAnchor = PlaybackAnchor(position: position, instant: ProcessInfo.processInfo.systemUptime,
+        let anchor = PlaybackAnchor(position: position, instant: ProcessInfo.processInfo.systemUptime,
             rate: snapshot.rate, duration: snapshot.duration)
         let track = NowPlayingTrack(title: snapshot.title, artist: snapshot.artist, album: snapshot.album,
             duration: snapshot.duration, elapsedTime: position, isPlaying: snapshot.playing,
             artwork: snapshot.artwork, dominantColor: lastColor, sourceBundleID: snapshot.bundleID)
-        if currentTrack != track { currentTrack = track }
+        publish(track, anchor: anchor)
+    }
+
+    private func publish(_ track: NowPlayingTrack, anchor: PlaybackAnchor) {
+        let correction = EnergyPolicy.positionChanged(previous: positionAnchor, next: anchor,
+                                                       now: ProcessInfo.processInfo.systemUptime)
+        // Compare presentation metadata independently of advancing elapsed time.
+        let metadataChanged = currentTrack.map {
+            $0.title != track.title || $0.artist != track.artist || $0.album != track.album ||
+            $0.duration != track.duration || $0.isPlaying != track.isPlaying ||
+            $0.sourceBundleID != track.sourceBundleID || $0.artwork != track.artwork
+        } ?? true
+        positionAnchor = anchor
+        if metadataChanged || correction { currentTrack = track }
     }
 
     private func clearSession() {
@@ -355,3 +375,14 @@ final class NowPlayingManager: ObservableObject {
         }
     }
 }
+
+#if DEBUG
+extension NowPlayingManager {
+    func setArtworkFixture(_ image: NSImage?) { artworkImage = image }
+
+    /// Exercises real publication logic without starting a media process or source query.
+    func applyEnergyFixture(_ track: NowPlayingTrack, anchor: PlaybackAnchor) {
+        publish(track, anchor: anchor)
+    }
+}
+#endif

@@ -20,3 +20,9 @@ build/media-checks
 xcrun swiftc -sdk "$sdk" -parse-as-library -I build/check-modules Sources/Services/ApprovalServer.swift scripts/check-approvals.swift build/check-modules/IslandCore.o -o build/approval-checks
 build/approval-checks
 python3 scripts/check-no-hover.py
+
+# Exercise the real media manager's publication path with providers stopped.
+app_sources=()
+while IFS= read -r source; do app_sources+=("$source"); done < <(find Sources -name '*.swift' ! -name main.swift ! -name AppDelegate.swift | sort)
+xcrun swiftc -DDEBUG -sdk "$sdk" -parse-as-library -I build/check-modules "${app_sources[@]}" scripts/check-energy.swift build/check-modules/IslandCore.o -o build/energy-checks
+build/energy-checks

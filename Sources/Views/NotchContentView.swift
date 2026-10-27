@@ -162,7 +162,8 @@ struct NotchContentView: View {
             else { emptyState }
         case .music:
             VStack(spacing: 4) {
-                NowPlayingExpandedView(manager: nowPlayingManager, animationAllowed: moving)
+                NowPlayingExpandedView(manager: nowPlayingManager, animationAllowed: moving,
+                    progressVisible: presentation.expanded && !presentation.suspended, lowPower: presentation.lowPower)
                 if let error = nowPlayingManager.controlError {
                     Text(error).font(.caption).foregroundColor(.orange)
                 } else if nowPlayingManager.currentTrack != nil && !nowPlayingManager.canControl {

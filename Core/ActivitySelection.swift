@@ -47,7 +47,7 @@ public struct RequestGeneration: Equatable, Sendable {
 
 public enum PollPolicy {
     public static func discovery(browsing: Bool, lowPower: Bool, failures: Int) -> TimeInterval {
-        backoff(base: browsing ? 120 : 300, lowPower: lowPower, failures: failures)
+        backoff(base: browsing ? 120 : 900, lowPower: lowPower, failures: failures)
     }
     public static func detail(live: Bool, completed: Bool, expanded: Bool,
                               lowPower: Bool, failures: Int) -> TimeInterval {

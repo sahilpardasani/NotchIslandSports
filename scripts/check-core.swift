@@ -24,7 +24,7 @@ import Foundation
         let old = generation.value
         generation.invalidate(); generation.invalidate()
         check(!generation.accepts(old), "A/B/A race rejection")
-        check(PollPolicy.discovery(browsing: false, lowPower: false, failures: 0) == 300, "discovery interval")
+        check(PollPolicy.discovery(browsing: false, lowPower: false, failures: 0) == 900, "discovery interval")
         check(PollPolicy.detail(live: true, completed: false, expanded: false, lowPower: false, failures: 0) == 30, "live compact freshness")
         check(PollPolicy.detail(live: true, completed: false, expanded: true, lowPower: false, failures: 0) == 15, "live expanded freshness")
         check(PollPolicy.discovery(browsing: false, lowPower: true, failures: 20) == 1800, "bounded backoff")

@@ -323,11 +323,8 @@ struct SecondaryActivityView: View {
                 switch activity {
                 case .music:
                     HStack(spacing: 5) {
-                        DynamicIslandWaveform(isPlaying: media.currentTrack?.isPlaying == true,
-                            color: media.currentTrack?.dominantColor ?? .cyan, barCount: 5,
-                            animationAllowed: MediaMotion.allowed(playing: media.currentTrack?.isPlaying == true,
-                                active: media.isActive, visible: !presentation.suspended && (third ? presentation.showsTertiary : presentation.showsSecondary),
-                                reduceMotion: presentation.reduceMotion, lowPower: presentation.lowPower))
+                        MediaArtworkThumbnail(image: media.artworkImage,
+                            tint: media.currentTrack?.dominantColor ?? .purple)
                         if !presentation.selection.overflow.isEmpty { Text("+\(presentation.selection.overflow.count)").font(.caption2) }
                     }.foregroundColor(media.currentTrack?.dominantColor ?? .purple)
                 case .approval: ApprovalCompactView(manager: approvals, minimal: true)

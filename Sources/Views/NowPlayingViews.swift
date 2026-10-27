@@ -2,6 +2,28 @@ import SwiftUI
 import Cocoa
 import IslandCore
 
+/// Reuses the decoded source artwork. No timeline, repeated decoding or network fetches.
+struct MediaArtworkThumbnail: View {
+    let image: NSImage?
+    var tint: Color = .purple
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(tint.opacity(0.25))
+                    .overlay(Image(systemName: "music.note")
+                        .font(.system(size: 13, weight: .semibold)).foregroundColor(tint))
+            }
+        }
+        .frame(width: 24, height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .accessibilityHidden(true) // The parent button announces the current track.
+    }
+}
+
 // MARK: - Decorative playback bars (not an audio-level meter)
 
 struct DynamicIslandWaveform: View {
@@ -114,11 +136,10 @@ struct NowPlayingCollapsedView: View {
 struct NowPlayingExpandedView: View {
     @ObservedObject var manager: NowPlayingManager
     var animationAllowed = false
-    
-
+    var progressVisible = true
+    var lowPower = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1, paused: manager.currentTrack?.isPlaying != true || !manager.isActive)) { _ in
         Group {
             if let track = manager.currentTrack {
                 VStack(spacing: 0) {
@@ -173,43 +194,8 @@ struct NowPlayingExpandedView: View {
                     .padding(.top, 6)
 
                     // ── Progress bar ─────────────────────────────────────
-                    VStack(spacing: 3) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.12))
-                                    .frame(height: 4)
-
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [track.dominantColor, track.dominantColor.opacity(0.7)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(
-                                        width: geo.size.width * CGFloat(progressRatio(track)),
-                                        height: 4
-                                    )
-                            }
-                        }
-                        .frame(height: 4)
-
-                        // Time labels
-                        HStack {
-                            Text(formatTime(manager.elapsedTime()))
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.45))
-                            Spacer()
-                            Text("-" + formatTime(max(0, track.duration - manager.elapsedTime())))
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.45))
-                        }
-                        .padding(.top, 2)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 12)
+                    MediaProgressView(manager: manager, track: track,
+                        visible: progressVisible, lowPower: lowPower)
 
                     // ── Playback controls ─────────────────────────────────
                     HStack(spacing: 0) {
@@ -313,7 +299,57 @@ struct NowPlayingExpandedView: View {
             }
         }
     }
+}
 
+/// A one-second progress tick never rebuilds the artwork, title or controls.
+private struct MediaProgressView: View {
+    @ObservedObject var manager: NowPlayingManager
+    let track: NowPlayingTrack
+    let visible: Bool
+    let lowPower: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: lowPower ? 2 : 1,
+            paused: !visible || !manager.isActive || !track.isPlaying || track.duration <= 0)) { _ in
+            VStack(spacing: 3) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.12))
+                            .frame(height: 4)
+
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [track.dominantColor, track.dominantColor.opacity(0.7)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(
+                                width: geo.size.width * CGFloat(progressRatio(track)),
+                                height: 4
+                            )
+                    }
+                }
+                .frame(height: 4)
+
+                // Time labels
+                HStack {
+                    Text(formatTime(manager.elapsedTime()))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.45))
+                    Spacer()
+                    Text("-" + formatTime(max(0, track.duration - manager.elapsedTime())))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                .padding(.top, 2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+
+        }
     }
 
     // MARK: - Helpers

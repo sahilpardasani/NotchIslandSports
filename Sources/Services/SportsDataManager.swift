@@ -328,7 +328,9 @@ class SportsDataManager: ObservableObject {
             autoSelectActiveMatch()
         }
     }
-    @Published var showMatchSelector = false
+    @Published var showMatchSelector = false {
+        didSet { if oldValue != showMatchSelector { scheduleDiscovery() } }
+    }
     @Published var isUsingMockData = false
     @Published var forceNotchLayout = false
     @Published var hasNotch = false
@@ -386,6 +388,7 @@ class SportsDataManager: ObservableObject {
     private var isPolling = false
     private var suspended = false
     private var discoveryFailures = 0
+    private var lastDiscoveryAt: Date?
     private var cacheDates: [SportType: Date] = [:]
     private var detailFailures = 0
 
@@ -447,7 +450,10 @@ class SportsDataManager: ObservableObject {
         guard !isPolling else { return }
         isPolling = true
         suspended = false
-        requestDiscovery()
+        if EnergyPolicy.discoveryNeeded(age: lastDiscoveryAt.map { Date().timeIntervalSince($0) },
+                                        browsing: showMatchSelector, lowPower: lowPowerMode) {
+            requestDiscovery()
+        } else { scheduleDiscovery() }
         scheduleDetail(after: 1)
     }
 
@@ -815,6 +821,7 @@ class SportsDataManager: ObservableObject {
         }
 
         guard !Task.isCancelled, lifecycleGeneration.accepts(generation) else { return }
+        lastDiscoveryAt = Date()
         discoveryFailures = errors.isEmpty ? 0 : discoveryFailures + 1
 
         // Build unified match list — include ALL statuses

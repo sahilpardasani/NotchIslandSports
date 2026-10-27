@@ -8,7 +8,7 @@ import IslandCore
 final class NativeClockManager: ObservableObject {
     @Published private(set) var timers: [ObservedClockTimer] = []
     @Published private(set) var status = "Native Clock observation is off"
-    @Published private(set) var observedAt: Date?
+    private(set) var observedAt: Date?
     @Published private(set) var controlBusy = false
     @Published private(set) var controlMessage: String?
     @Published private(set) var hasAccessibilityAccess = AXIsProcessTrusted()
@@ -39,6 +39,7 @@ final class NativeClockManager: ObservableObject {
     private var lastTrusted = AXIsProcessTrusted()
     private var reading = false
     private var running = false
+    private var lowPower = false
     private var generation = 0
     private var observers: [NSObjectProtocol] = []
 
@@ -110,6 +111,12 @@ final class NativeClockManager: ObservableObject {
         refresh()
     }
 
+    func setLowPower(_ value: Bool) {
+        guard lowPower != value else { return }
+        lowPower = value
+        if running && enabled { refresh() }
+    }
+
     func start() {
         guard !running else { return }
         running = true
@@ -158,7 +165,9 @@ final class NativeClockManager: ObservableObject {
         generation += 1
         controlBusy = false
         poll?.invalidate(); poll = nil
-        timers = []; observedAt = nil; status = message
+        if !timers.isEmpty { timers = [] }
+        observedAt = nil
+        if status != message { status = message }
         reader.detach()
         reading = false
     }
@@ -169,7 +178,10 @@ final class NativeClockManager: ObservableObject {
         if hasAccessibilityAccess != lastTrusted { hasAccessibilityAccess = lastTrusted }
         guard lastTrusted else {
             clear("Allow NotchIslandSports in System Settings → Privacy & Security → Accessibility. Observation resumes automatically.")
-            schedule(after: setupVisible ? 1 : 15)
+            if let interval = EnergyPolicy.clockInterval(trusted: false, appRunning: false,
+                setupVisible: setupVisible, hasTimers: false, runningTimer: false, lowPower: lowPower) {
+                schedule(after: interval)
+            }
             return
         }
         if pendingSetup { continueSetup(); return }
@@ -177,7 +189,7 @@ final class NativeClockManager: ObservableObject {
         poll?.invalidate()
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.clock").first else {
             clear("Open Apple Clock and select Timers")
-            schedule(after: 15)
+            // Workspace launch/activation notifications reconnect; no idle wakeups.
             return
         }
         reading = true
@@ -186,16 +198,22 @@ final class NativeClockManager: ObservableObject {
             Task { @MainActor in
                 guard let self, self.running, self.enabled, token == self.generation else { return }
                 self.reading = false
-                self.timers = snapshot ?? []
+                let next = snapshot ?? []
+                if self.timers != next { self.timers = next }
                 if !self.timers.isEmpty && !self.setupValidated {
                     self.setupValidated = true; self.setupFailure = nil
                     self.defaults.set(true, forKey: "NativeClockConfigured")
                 }
                 self.observedAt = self.timers.isEmpty ? nil : Date()
-                self.status = self.timers.isEmpty
+                let status = self.timers.isEmpty
                     ? "No readable timers. Keep Clock’s Timers view open. This experimental adapter currently recognizes English timer controls."
                     : "Observed in Apple Clock"
-                self.schedule(after: self.timers.isEmpty ? 15 : (ProcessInfo.processInfo.isLowPowerModeEnabled ? 5 : 2))
+                if self.status != status { self.status = status }
+                if let interval = EnergyPolicy.clockInterval(trusted: true, appRunning: true,
+                    setupVisible: self.setupVisible, hasTimers: !self.timers.isEmpty,
+                    runningTimer: self.timers.contains(where: { !$0.paused }), lowPower: self.lowPower) {
+                    self.schedule(after: interval)
+                }
             }
         }
     }
@@ -242,6 +260,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
     private var application: AXUIElement?
     private var processID: pid_t?
     private var lastSignal = Date.distantPast
+    private var hasTimers = false
     private var cards: [String: [AXUIElement]] = [:]
     private var snapshotElements: [String: AXUIElement] = [:]
     private var selectedAnchors: [String: AXUIElement] = [:]
@@ -301,6 +320,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
 
     func read(pid: pid_t, completion: @escaping ([ObservedClockTimer]?) -> Void) {
         queue.async {
+            self.hasTimers = false
             self.cards = [:]; self.snapshotElements = [:]; self.selectedAnchors = [:]
             if self.processID != pid {
                 self.removeObserver()
@@ -308,11 +328,15 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                 AXUIElementSetMessagingTimeout(app, 0.1)
                 self.application = app; self.processID = pid
                 var observer: AXObserver?
-                let callback: AXObserverCallback = { _, _, _, context in
+                let callback: AXObserverCallback = { _, _, notification, context in
                     guard let context else { return }
                     let reader = Unmanaged<ClockAccessibilityReader>.fromOpaque(context).takeUnretainedValue()
-                    // Coalesce value-change storms; the two-second reconciler handles seconds.
+                    // Coalesce structural/focus notifications; the reconciler handles countdown seconds.
+                    let valueChanged = notification as String == kAXValueChangedNotification
                     reader.queue.async {
+                        // A new timer can trigger discovery immediately. Existing countdown
+                        // ticks must not trigger another full AX tree scan every second.
+                        guard !valueChanged || !reader.hasTimers else { return }
                         guard Date().timeIntervalSince(reader.lastSignal) > 0.75 else { return }
                         reader.lastSignal = Date()
                         reader.onChange?()
@@ -358,6 +382,7 @@ private final class ClockAccessibilityReader: @unchecked Sendable {
                 }
                 return timer
             }
+            self.hasTimers = !timers.isEmpty
             completion(timers)
         }
     }

@@ -1,9 +1,17 @@
-# Preview 1.6 (build 11) — restored centered score layout
+# Preview 1.6 (build 12) — lower background battery work
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 11 layout correction (current)
+## Build 12 battery and artwork changes (current)
+
+The small media satellite now displays cached album/video artwork instead of animated bars. When the player supplies no artwork, it displays a static music-note tile. Tapping/pulling down still opens controls; hold/swipe behavior and full media title scrolling are unchanged.
+
+Background sports discovery drops from every 5 to every 15 minutes while selected live scores retain their current refresh rate. Brief sleep/wake reuses a fresh completed catalog. Closed Clock no longer has a polling timer, unchanged Clock state no longer republishes the whole island, and countdown notifications no longer cause redundant full-tree scans. Paused Clock and empty Clock use slower reconciliation. Setup and native event discovery remain available.
+
+Media keeps its event-driven connection. Routine elapsed-time snapshots update the anchor without rebuilding the island, while metadata, source, playback and seek changes still publish. Expanded progress now ticks only its small progress/time region, stops when hidden or paused, and slows to two seconds under Low Power Mode or thermal pressure. Title scrolling, 30 fps decorative bars, gestures, centered positioning, all 13 sports and approvals are preserved. Version remains 1.6.0, bundle/About build 12. See [battery behavior and verification](BATTERY.md) for exact intervals and limitations. Actual battery drain has not been measured.
+
+## Build 11 layout correction retained
 
 Fixes the screenshot regression where the primary became a large blank camera section followed by both scores crammed on the right. Menu fallback used to reserve the whole left side and relocate both score labels into the right ear. The primary now keeps equal ears on opposite sides of the physical camera, the same compact height and a stable center through menu changes and expansion. Removed the asymmetric renderer so it cannot be reintroduced by a stale presentation value. The compact cricket team and multi-innings score scale together instead of sacrificing the team abbreviation first. Title scrolling is unchanged. Expanded media trims the empty lower outer corners further, curving inward around the previous/next controls while preserving their 36-point hit areas and the bottom swipe handle.
 

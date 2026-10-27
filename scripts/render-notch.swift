@@ -18,11 +18,20 @@ import IslandCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
                                   ("notch-approval-expanded", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+            if name == "notch-artwork-pill" {
+                let cover = NSImage(size: NSSize(width: 96, height: 96))
+                cover.lockFocus()
+                NSColor.systemTeal.setFill(); NSBezierPath(rect: NSRect(x: 0, y: 0, width: 96, height: 96)).fill()
+                NSColor.systemIndigo.setFill(); NSBezierPath(ovalIn: NSRect(x: 16, y: 16, width: 64, height: 64)).fill()
+                NSColor.white.setFill(); NSBezierPath(ovalIn: NSRect(x: 40, y: 40, width: 16, height: 16)).fill()
+                cover.unlockFocus()
+                media.setArtworkFixture(cover)
+            } else { media.setArtworkFixture(nil) }
             let approvalCrowded = name == "notch-approval-crowded"
             let scoreRegression = name.hasPrefix("notch-score-")
             data.activeMatch = scoreRegression ? .cricket(CricketMatch(id: "layout-regression", status: .unknown,
@@ -40,7 +49,7 @@ import IslandCore
                 presentation.update(sports: true, music: true, clock: false)
                 presentation.promote(.music); presentation.collapse(); presentation.finishResize()
             }
-            if name == "notch-calendar-compact" { presentation.cyclePrimary(forward: false) }
+            if name == "notch-calendar-compact" || name == "notch-artwork-pill" { presentation.cyclePrimary(forward: false) }
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
