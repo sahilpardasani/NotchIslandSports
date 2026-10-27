@@ -1,4 +1,5 @@
 import SwiftUI
+import IslandCore
 
 struct CollapsedScoreView: View {
     @ObservedObject var dataManager: SportsDataManager
@@ -208,14 +209,7 @@ struct CollapsedScoreView: View {
                 .lineLimit(1)
                 .layoutPriority(1)
             
-            let oversSuffix: String = {
-                if let maxO = getMaxOvers(for: match) {
-                    return getOversText(for: match.awayTeamAbbrev, match: match, maxOvers: maxO)
-                }
-                return ""
-            }()
-            
-            Text("\(cleanScore(match.awayScore))\(oversSuffix)")
+            Text(CompactActivityText.score(match.awayScore))
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundColor(isWinner(match: .cricket(match), isHome: false) ? Color(hex: "E6FF00") : .white)
                 .lineLimit(1)
@@ -226,14 +220,7 @@ struct CollapsedScoreView: View {
     @ViewBuilder
     private func cricketRightSide(_ match: CricketMatch) -> some View {
         HStack(spacing: 6) {
-            let oversSuffix: String = {
-                if let maxO = getMaxOvers(for: match) {
-                    return getOversText(for: match.homeTeamAbbrev, match: match, maxOvers: maxO)
-                }
-                return ""
-            }()
-            
-            Text("\(cleanScore(match.homeScore))\(oversSuffix)")
+            Text(CompactActivityText.score(match.homeScore))
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundColor(isWinner(match: .cricket(match), isHome: true) ? Color(hex: "E6FF00") : .white)
                 .lineLimit(1)
@@ -257,64 +244,6 @@ struct CollapsedScoreView: View {
                         .cornerRadius(4)
                 }
             }
-        }
-    }
-    
-    private func getMaxOvers(for match: CricketMatch) -> Int? {
-        let text = (match.matchDescription + " " + match.statusText).lowercased()
-        if text.contains("t20") || text.contains("ipl") || text.contains("t-20") || text.contains("bbl") || text.contains("psl") || text.contains("cpl") || text.contains("twenty20") || text.contains("twenty-20") {
-            return 20
-        } else if text.contains("the hundred") || text.contains("hundred") {
-            return 20  // The Hundred uses 100 balls ≈ 20 overs equivalent
-        } else if text.contains("odi") || text.contains("one-day") || text.contains("one day") || text.contains("50 overs") || text.contains("50-over") {
-            return 50
-        } else if text.contains("t10") || text.contains("t-10") || text.contains("10 overs") || text.contains("10-over") {
-            return 10
-        }
-        
-        if let league = match.leagueId?.lowercased() {
-            if league.contains("ipl") || league.contains("t20") || league.contains("bbl") || league.contains("psl") || league.contains("hundred") {
-                return 20
-            }
-        }
-        
-        if text.contains("test") || text.contains("first-class") || text.contains("first class") || text.contains("county") || text.contains("shield") || text.contains("ashes") || text.contains("trophy") {
-            return nil
-        }
-        
-        return nil
-    }
-    
-    private func getOversText(for teamAbbrev: String, match: CricketMatch, maxOvers: Int) -> String {
-        let isHome = teamAbbrev == match.homeTeamAbbrev
-        let score = isHome ? match.homeScore : match.awayScore
-        
-        if score == "–" || score.isEmpty {
-            return ""
-        }
-        
-        let isCurrentlyBatting: Bool
-        if let currentInnings = match.currentInnings {
-            let teamNameLower = currentInnings.teamName.lowercased()
-            let matchAwayLower = match.awayTeam.lowercased()
-            let matchAwayAbbrevLower = match.awayTeamAbbrev.lowercased()
-            let matchHomeLower = match.homeTeam.lowercased()
-            let matchHomeAbbrevLower = match.homeTeamAbbrev.lowercased()
-            
-            if isHome {
-                isCurrentlyBatting = teamNameLower.contains(matchHomeLower) || teamNameLower.contains(matchHomeAbbrevLower)
-            } else {
-                isCurrentlyBatting = teamNameLower.contains(matchAwayLower) || teamNameLower.contains(matchAwayAbbrevLower)
-            }
-        } else {
-            isCurrentlyBatting = false
-        }
-        
-        if isCurrentlyBatting, let currentInnings = match.currentInnings {
-            let formattedOvers = String(format: "%.1f", currentInnings.overs)
-            return " (\(formattedOvers)/\(maxOvers))"
-        } else {
-            return " (\(maxOvers)/\(maxOvers))"
         }
     }
     
