@@ -1,3 +1,5 @@
+> **Current 1.4 behavior:** [Interaction update](INTERACTION-UPDATE.md) supersedes older Calendar-slot/tab-bar instructions below. Three live slots are reserved for sports, music and native Clock; Calendar is swipe-only. Setup is in the menu bar. Hold-and-swipe merges. The compact strip fits the camera band. Approval/delivery integrations remain unimplemented; the update documents supported hook research.
+
 # Notch placement, pull-down and three activities — 1.3 preview
 
 This update corrects the previous preview's regression: it positioned the island below the menu bar and made the sports strip too wide. The new layout is anchored at the **physical MacBook camera**, centered horizontally on its cutout and flush with the screen's top edge. It prefers the built-in notched display when available. External/non-notched displays use a top-center fallback.

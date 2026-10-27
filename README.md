@@ -1,6 +1,6 @@
-> 1.3 preview restores the physical-notch top anchor and pull-down interaction, shows three activities at once, and adds experimental native Clock controls. See [details and validation](docs/NOTCH-RESTORATION.md).
+> **1.4 preview:** Up to three live activities; Calendar stays outside the slots and opens by swipe. Hold-and-swipe merges; the menu bar manages widgets/settings. The collapsed strip now fits the camera band, with eased pull-down/collapse transitions. [Current behavior, limits and validation](docs/INTERACTION-UPDATE.md).
 
-> Calendar update: today’s collapsed event advances automatically at its end time. Apple Calendar events stay untouched. See [calendar behavior and setup](docs/CALENDAR.md).
+> Calendar is read-only and its agenda advances past ended events without changing Apple Calendar. In 1.4 it is a swipe-accessed page, not a split or compact activity.
 
 # 🏟️ NotchIslandSports
 

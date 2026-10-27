@@ -48,7 +48,7 @@ struct CalendarAgendaView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .accessibilityLabel("Upcoming calendar events")
-                    Text("Scroll for more · Island shows today’s next event")
+                    Text("Scroll for more · Swipe the header to change pages")
                         .font(.system(size: 10)).foregroundColor(.white.opacity(0.5))
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }

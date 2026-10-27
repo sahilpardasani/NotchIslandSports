@@ -1,3 +1,5 @@
+> **Current 1.4 behavior:** [Interaction update](INTERACTION-UPDATE.md) supersedes older Calendar-slot/tab-bar instructions below. Three live slots are reserved for sports, music and native Clock; Calendar is swipe-only. Setup is in the menu bar. Hold-and-swipe merges. The compact strip fits the camera band. Approval/delivery integrations remain unimplemented; the update documents supported hook research.
+
 > Latest follow-up: [notch restoration and three activities](NOTCH-RESTORATION.md) supersedes the earlier below-camera/two-slot placement and observation-only Clock behavior. Clock controls are now experimental and user-triggered; Calendar remains strictly read-only.
 
 # NotchIslandSports implementation report

@@ -29,16 +29,7 @@ struct NativeClockView: View {
             if let observedAt = manager.observedAt {
                 Text("Last observed: \(observedAt, style: .time)").font(.caption2).foregroundColor(.secondary)
             }
-            HStack {
-                Button("Open Clock") { manager.openClock() }
-                if !manager.enabled {
-                    Button("Enable Clock Observation…") { manager.requestPermission() }
-                } else {
-                    Button("Refresh Clock") { manager.refresh() }
-                    Button("Disable") { manager.enabled = false }
-                }
-            }
-            Text("Timers stay in Apple Clock. Pause, resume and cancel appear only when native controls can be identified. Otherwise use Open Clock.")
+            Text("Timers stay in Apple Clock. Pause, resume and cancel appear only when native controls can be identified. Open Clock or enable observation from the menu-bar menu → Clock Settings.")
                 .font(.caption2).foregroundColor(.secondary).multilineTextAlignment(.center)
         }.padding(14)
         .alert(item: $cancelling) { timer in

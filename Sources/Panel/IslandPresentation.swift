@@ -5,50 +5,81 @@ import IslandCore
 @MainActor
 final class IslandPresentation: ObservableObject {
     @Published private(set) var selection = ActivitySelection()
+    @Published private(set) var merged: Bool
     @Published var selectedTab: IslandActivity = .sports
     @Published var cameraHeight: CGFloat = 0
+    @Published var expandedPanelHeight: CGFloat = 520
     @Published var expanded = false
     @Published var pinned = false
     @Published var suspended = false
     @Published var lowPower = false
     @Published var reduceMotion = false
     private var available = Set<IslandActivity>()
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        merged = defaults.bool(forKey: "IslandActivitiesMerged")
+    }
+    var showsSecondary: Bool { !merged && selection.secondary != nil }
+    var showsTertiary: Bool { !merged && selection.tertiary != nil }
 
     func update(sports: Bool, music: Bool, clock: Bool, calendar: Bool = false) {
         available = []
         if sports { available.insert(.sports) }
         if music { available.insert(.music) }
         if clock { available.insert(.clock) }
-        if calendar { available.insert(.calendar) }
+        // Calendar availability never changes the live slots or their ordering.
         var next = selection
         next.update(available: available)
         if next != selection { selection = next }
         if !expanded, selectedTab != (next.primary ?? .sports) { selectedTab = next.primary ?? .sports }
     }
     func open(_ activity: IslandActivity, pin: Bool = true) {
-        selectedTab = activity
-        pinned = pin
-        expanded = true
+        if selectedTab != activity { selectedTab = activity }
+        if pinned != pin { pinned = pin }
+        if !expanded { expanded = true }
     }
     func promote(_ activity: IslandActivity) {
         var next = selection
         next.update(available: available, preferred: activity)
-        selection = next
+        if next != selection { selection = next }
         open(activity)
     }
-    func cyclePrimary() {
-        let slots = [selection.primary, selection.secondary, selection.tertiary].compactMap { $0 } + selection.overflow
-        guard slots.count > 1 else { return }
-        var next = selection
-        next.update(available: available, preferred: slots[1])
-        if next != selection { selection = next }
-        if let primary = next.primary, selectedTab != primary { selectedTab = primary }
+    /// Calendar stays reachable even when empty or disconnected, without displacing live slots.
+    func cyclePrimary(forward: Bool = true) {
+        let pages = IslandActivity.allCases.filter { available.contains($0) || $0 == .calendar }
+        let current = expanded ? selectedTab : selection.primary
+        let index = current.flatMap { pages.firstIndex(of: $0) }
+        let nextIndex = index.map { ($0 + (forward ? 1 : pages.count - 1)) % pages.count } ?? (forward ? 0 : pages.count - 1)
+        let activity = pages[nextIndex]
+        if expanded || activity == .calendar { open(activity) }
+        else {
+            var next = selection
+            next.update(available: available, preferred: activity)
+            if next != selection { selection = next }
+            if selectedTab != activity { selectedTab = activity }
+        }
     }
-    func pullDown() { open(selection.primary ?? .sports) }
-    func handleDrag(horizontal: CGFloat, vertical: CGFloat) {
-        if abs(vertical) > abs(horizontal), abs(vertical) > 18 {
+    func setMerged(_ value: Bool) {
+        guard merged != value else { return }
+        merged = value
+        defaults.set(value, forKey: "IslandActivitiesMerged")
+    }
+    func mergeActivities() { setMerged(true); collapse() }
+    func pullDown() { open(selection.primary ?? .calendar) }
+    func handleDrag(horizontal: CGFloat, vertical: CGFloat, held: Bool = false) {
+        if abs(horizontal) > abs(vertical), abs(horizontal) > 20 {
+            if held { mergeActivities() }
+            else { cyclePrimary(forward: horizontal < 0) }
+        } else if !held, abs(vertical) > abs(horizontal), abs(vertical) > 18 {
             if vertical > 0 { pullDown() } else { collapse() }
-        } else if abs(horizontal) > 20 { cyclePrimary() }
+        }
     }
-    func collapse() { pinned = false; expanded = false; selectedTab = selection.primary ?? .sports }
+    func collapse() {
+        if pinned { pinned = false }
+        if expanded { expanded = false }
+        let activity = selection.primary ?? .sports
+        if selectedTab != activity { selectedTab = activity }
+    }
 }

@@ -95,7 +95,7 @@ struct NotchContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
+        ZStack(alignment: .top) {
             if presentation.expanded {
                 VStack(spacing: 6) {
                     Color.clear.frame(height: presentation.cameraHeight)
@@ -103,10 +103,14 @@ struct NotchContentView: View {
                         .frame(maxWidth: .infinity).frame(height: 12).contentShape(Rectangle())
                         .accessibilityLabel("Drag up to collapse island")
                     HStack(spacing: 6) {
-                        tab("Sports", icon: "sportscourt", activity: .sports)
-                        tab("Music", icon: "music.note", activity: .music)
-                        tab("Calendar", icon: "calendar", activity: .calendar)
-                        tab("Clock", icon: "timer", activity: .clock)
+                        Button { presentation.cyclePrimary(forward: false) } label: { Image(systemName: "chevron.left") }
+                            .buttonStyle(.plain).accessibilityLabel("Previous page")
+                        Spacer()
+                        Text(presentation.selectedTab == .clock ? "Apple Clock" : presentation.selectedTab.rawValue.capitalized)
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Button { presentation.cyclePrimary() } label: { Image(systemName: "chevron.right") }
+                            .buttonStyle(.plain).accessibilityLabel("Next page")
                         Button { presentation.collapse() } label: { Image(systemName: "xmark") }
                             .buttonStyle(.plain).accessibilityLabel("Collapse island")
                             .keyboardShortcut(.cancelAction)
@@ -128,7 +132,7 @@ struct NotchContentView: View {
                                         .font(.caption).foregroundColor(.secondary)
                                 }
                             }
-                        case .calendar: NativeCalendarView(manager: calendarManager, presentation: presentation)
+                        case .calendar: NativeCalendarView(manager: calendarManager)
                         case .clock: NativeClockView(manager: clockManager)
                         }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -136,6 +140,8 @@ struct NotchContentView: View {
                         Text(error).font(.caption).foregroundColor(.orange).padding(.bottom, 4)
                     }
                 }
+                .frame(height: presentation.expandedPanelHeight)
+                .transition(.opacity)
             } else {
                 Button {
                     presentation.open(presentation.selection.primary ?? .sports)
@@ -150,6 +156,7 @@ struct NotchContentView: View {
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .buttonStyle(.plain)
+                .transition(.opacity)
                 .accessibilityLabel("Expand \(presentation.selection.primary?.rawValue ?? "sports") activity")
             }
         }
@@ -159,13 +166,9 @@ struct NotchContentView: View {
         .foregroundColor(.white)
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
-        .transaction { if reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
-        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-            // Expanded content keeps vertical drag/scroll interaction; its handle owns collapse.
-            if !presentation.expanded || value.startLocation.y < presentation.cameraHeight + 36 || abs(value.translation.width) > abs(value.translation.height) {
-                presentation.handleDrag(horizontal: value.translation.width, vertical: value.translation.height)
-            }
-        })
+        .animation(reduceMotion || presentation.reduceMotion || presentation.lowPower || presentation.suspended ? nil : .easeInOut(duration: 0.18), value: presentation.expanded)
+        .transaction { if reduceMotion || presentation.reduceMotion || presentation.lowPower || presentation.suspended { $0.disablesAnimations = true } }
+        .modifier(IslandSwipeGesture(presentation: presentation, headerOnly: true))
         .onExitCommand { presentation.collapse() }
     }
 
@@ -190,17 +193,6 @@ struct NotchContentView: View {
                 }
             }
         }
-    }
-
-    private func tab(_ title: String, icon: String, activity: IslandActivity) -> some View {
-        Button { presentation.open(activity) } label: {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(maxWidth: .infinity).padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8)
-                    .fill(presentation.selectedTab == activity ? Color.white.opacity(0.16) : .clear))
-        }.buttonStyle(.plain)
-        .accessibilityAddTraits(presentation.selectedTab == activity ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -268,26 +260,10 @@ struct NotchContentView: View {
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(DesignSystem.primaryText)
             
-            Text("Hover and click to select a match")
+            Text("Choose Select Match from the menu-bar menu")
                 .font(.system(.caption, design: .rounded))
                 .foregroundColor(DesignSystem.secondaryText)
-            
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    dataManager.showMatchSelector = true
-                }
-            }) {
-                Label("Browse Matches", systemImage: "list.bullet")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.15))
-                    )
-            }
-            .buttonStyle(.plain)
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

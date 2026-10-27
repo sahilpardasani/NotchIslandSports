@@ -1,3 +1,5 @@
+> **Current 1.4 behavior:** [Interaction update](INTERACTION-UPDATE.md) supersedes older Calendar-slot/tab-bar instructions below. Three live slots are reserved for sports, music and native Clock; Calendar is swipe-only. Setup is in the menu bar. Hold-and-swipe merges. The compact strip fits the camera band. Approval/delivery integrations remain unimplemented; the update documents supported hook research.
+
 # Calendar follow-up — 1.2 preview
 
 The calendar UI shown in the user's screenshot was not present in either available GitHub branch or source snapshot. This follow-up adds a native Apple Calendar integration to the existing preview and addresses the observed overflow with a bounded agenda. It preserves the prior sports, music and native Clock work.

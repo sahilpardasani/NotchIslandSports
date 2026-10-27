@@ -32,6 +32,19 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(selection.primary, .sports)
         XCTAssertNil(selection.secondary)
     }
+    func testCalendarIsBrowseOnlyEvenWhenPreferredOrAlone() {
+        var slots = ActivitySelection()
+        slots.update(available: [.sports, .music, .clock, .calendar], preferred: .calendar)
+        XCTAssertEqual(slots.primary, .sports)
+        XCTAssertEqual(slots.secondary, .music)
+        XCTAssertEqual(slots.tertiary, .clock)
+        XCTAssertTrue(slots.overflow.isEmpty)
+        slots.update(available: [.calendar], preferred: .calendar)
+        XCTAssertNil(slots.primary)
+        XCTAssertNil(slots.secondary)
+        XCTAssertNil(slots.tertiary)
+        XCTAssertTrue(slots.overflow.isEmpty)
+    }
     func testOldRequestCannotPublishAfterSelectionChangesAndReturns() {
         var generation = RequestGeneration()
         let requestA = generation.value

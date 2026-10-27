@@ -3,7 +3,6 @@ import IslandCore
 
 struct NativeCalendarView: View {
     @ObservedObject var manager: CalendarManager
-    @ObservedObject var presentation: IslandPresentation
     var body: some View {
         VStack(spacing: 0) {
             if manager.enabled && manager.hasAccess {
@@ -12,19 +11,12 @@ struct NativeCalendarView: View {
                 } else {
                     CalendarAgendaView(events: manager.events, currentEvent: manager.currentEvent, now: manager.now)
                 }
-                HStack {
-                    Button("Open Calendar") { manager.openCalendar() }
-                    Button("Show in island") { presentation.promote(.calendar); presentation.collapse() }
-                        .disabled(manager.currentEvent == nil)
-                    Spacer(minLength: 4)
-                    Button("Disconnect") { manager.enabled = false }
-                }.font(.system(size: 11)).padding(.horizontal, 16).padding(.bottom, 12)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "calendar").font(.system(size: 32)).foregroundColor(.cyan)
                     Text("Your calendar, at a glance").font(.headline)
                     Text(manager.status).font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
-                    Button("Connect Apple Calendar") { manager.connect() }
+                    Text("Connect using the menu-bar menu → Calendar Settings.").font(.caption)
                     Text("Read on this Mac. Nothing is changed or uploaded. macOS calls the permission “Full Access” because reading events requires it.")
                         .font(.caption2).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)

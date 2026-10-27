@@ -2,6 +2,9 @@ import Foundation
 
 public enum IslandActivity: String, CaseIterable, Codable, Sendable {
     case sports, music, clock, calendar
+
+    /// Calendar is a browse page, never a live split activity.
+    public var occupiesLiveSlot: Bool { self != .calendar }
 }
 
 /// Pure selection: content updates never reorder slots; explicit selection can.
@@ -13,6 +16,7 @@ public struct ActivitySelection: Equatable, Sendable {
     public init() {}
 
     public mutating func update(available: Set<IslandActivity>, preferred: IslandActivity? = nil) {
+        let available = available.filter(\.occupiesLiveSlot)
         let existing = [primary, secondary, tertiary].compactMap { $0 } + overflow
         var ordered: [IslandActivity] = []
         if let preferred, available.contains(preferred) { ordered.append(preferred) }

@@ -18,10 +18,12 @@ public struct NotchGeometry: Equatable, Sendable {
         let valid = reportedWidth >= 80 && reportedWidth <= 300 &&
             abs(reportedCenter - screen.midX) < screen.width * 0.1
         let cameraWidth: CGFloat = notched ? (valid ? reportedWidth : 180) : 0
-        let cameraHeight: CGFloat = notched ? max(28, min(safeTop > 0 ? safeTop : 32, 60)) : 0
+        let cameraHeight: CGFloat = notched ? min(safeTop > 0 ? safeTop : 32, 60) : 0
         let center = notched && valid ? reportedCenter : screen.midX
         let top = notched ? screen.maxY : screen.maxY - 4
-        let compactHeight = max(36, cameraHeight)
+        // Match the actual menu-bar/camera band, removing the old 4pt spill below it.
+        // Plain displays get the same small (3pt) trim without inventing a physical mm size.
+        let compactHeight = notched ? cameraHeight : 33
         let satelliteWidth: CGFloat = min(112, max(64, screen.width * 0.09))
         let gap: CGFloat = 8
         // Symmetric allowance keeps the primary centered on the camera as activities appear/disappear.
