@@ -331,12 +331,9 @@ struct SecondaryActivityView: View {
                 case .calendar: EmptyView() // Calendar never occupies a live slot.
                 case .clock: NativeClockCompactView(manager: clock, minimal: true)
                 case .sports:
-                    VStack(spacing: 1) {
-                        Text("\(dataManager.activeMatch?.homeTeamAbbrev ?? "") · \(dataManager.activeMatch?.awayTeamAbbrev ?? "")")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("\(CompactActivityText.score(dataManager.activeMatch?.homeScore ?? "")) · \(CompactActivityText.score(dataManager.activeMatch?.awayScore ?? ""))")
-                            .font(.system(size: 9, weight: .medium))
-                    }.foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.9).truncationMode(.tail)
+                    if let match = dataManager.activeMatch {
+                        SportsSatelliteView(match: match)
+                    }
                 case nil: EmptyView()
                 }
             }.frame(width: max(0, proxy.size.width - 16), height: proxy.size.height)
@@ -348,6 +345,6 @@ struct SecondaryActivityView: View {
         .background(Capsule().fill(Color.black))
         .clipShape(Capsule())
         .accessibilityLabel("Open \(activity?.rawValue ?? "activity") activity")
-        .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : "")
+        .accessibilityValue(activity == .music ? (media.currentTrack?.title ?? "") : activity == .sports ? (dataManager.activeMatch.map { SportsSatelliteView.accessibilitySummary($0) } ?? "") : "")
     }
 }

@@ -1,9 +1,13 @@
-# Preview 1.6 (build 15) — cleaner cricket scorecard
+# Preview 1.6 (build 16) — aligned secondary sports scores
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 15 cricket footer cleanup (current)
+## Build 16 secondary sports scores (current)
+
+The small sports pill now gives each team its own row, with scores aligned in a shared column. Both rows fit together without cutting digits or mismatching team names and scores. Cricket retains multi-innings scores while omitting overs; other sports retain their score notation, including tennis tiebreaks and F1 positions. VoiceOver reads both full team names and scores. Pill size, gestures, primary layout and polling are unchanged. Bundle/About build 16, version 1.6.0.
+
+## Build 15 cricket footer cleanup retained
 
 Removed the bottom match-description info strip (including season labels such as “2026/27”) from live and completed cricket scorecards. The expanded cricket panel is 36 points shorter. Scores, batting/bowling statistics, partnership, run rates, language control, match results and active break notices remain. Version is 1.6.0, bundle/About build 15.
 

@@ -8,6 +8,11 @@ import Foundation
             precondition(condition, name)
             checks += 1
         }
+        check(CompactActivityText.satelliteScore("187 & 46/4 (34 ov)", cricket: true) == "187 & 46/4", "Cricket innings retained without overs")
+        check(CompactActivityText.satelliteScore("500/9d & 123/4 (45 ov)", cricket: true) == "500/9d & 123/4", "Long cricket scores never sliced")
+        check(CompactActivityText.satelliteScore("7(5) 6 3", cricket: false) == "7(5) 6 3", "Tennis tiebreak preserved")
+        check(CompactActivityText.satelliteScore("P1", cricket: false) == "P1", "F1 position preserved")
+        check(CompactActivityText.satelliteScore("  ", cricket: false) == "—", "Absent score is not zero")
         var selection = ActivitySelection()
         selection.update(available: [.sports, .music])
         check(selection.primary == .sports && selection.secondary == .music, "sports/music split")

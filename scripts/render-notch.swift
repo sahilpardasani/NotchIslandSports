@@ -97,6 +97,32 @@ import IslandCore
             host.cacheDisplay(in: host.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent(name + ".png"))
         }
+        // Every sport at the actual minimum, typical and maximum satellite widths.
+        let sports = SportType.allCases.compactMap { sport in
+            MockDataProvider.getMockMatches().first { $0.sportType == sport }
+        } + [.cricket(CricketMatch(id: "multi-innings", status: .live,
+            homeTeam: "Sikkim", awayTeam: "Nagaland", homeTeamAbbrev: "SIKM", awayTeamAbbrev: "NAGA",
+            homeScore: "184", awayScore: "187 & 46/4 (34 ov)", statusText: ""))]
+        let sheet = VStack(alignment: .leading, spacing: 8) {
+            Text("Sports pills · 64 / 78 / 96 pt · synthetic fixtures").foregroundColor(.white)
+            ForEach(Array(sports.enumerated()), id: \.offset) { _, match in
+                HStack(spacing: 20) {
+                    Text(match.sportType.rawValue).font(.system(size: 11)).foregroundColor(.white).frame(width: 120, alignment: .leading)
+                    ForEach([64.0, 78.0, 96.0], id: \.self) { width in
+                        SportsSatelliteView(match: match).padding(.horizontal, 8)
+                            .frame(width: width, height: 32).background(Capsule().fill(.black)).clipShape(Capsule())
+                    }
+                }
+            }
+        }.padding(20).frame(width: 480).background(Color(red: 0.12, green: 0.14, blue: 0.19))
+        let sheetHost = NSHostingView(rootView: sheet)
+        sheetHost.frame = NSRect(x: 0, y: 0, width: 480, height: sports.count * 40 + 66)
+        let sheetWindow = NSWindow(contentRect: sheetHost.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        sheetWindow.contentView = sheetHost
+        sheetHost.layoutSubtreeIfNeeded()
+        let sheetBitmap = sheetHost.bitmapImageRepForCachingDisplay(in: sheetHost.bounds)!
+        sheetHost.cacheDisplay(in: sheetHost.bounds, to: sheetBitmap)
+        try sheetBitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("sports-pill-matrix.png"))
         let setup = NSHostingView(rootView: IslandSetupView(clock: NativeClockManager(defaults: defaults),
             calendar: CalendarManager(defaults: defaults), media: media, approvals: ApprovalManager(), presentation: IslandPresentation(defaults: defaults), done: {}).background(Color(nsColor: .windowBackgroundColor)))
         setup.frame = NSRect(x: 0, y: 0, width: 490, height: 600)
