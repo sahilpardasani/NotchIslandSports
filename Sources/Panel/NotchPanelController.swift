@@ -81,7 +81,7 @@ final class NotchPanelController {
 
     private func scrollSideways(forward: Bool, held: Bool, satelliteLeft: Bool? = nil) {
         if let satelliteLeft, satelliteLeft == !forward { presentation.mergeActivities(); return }
-        if held { presentation.setMerged(!presentation.merged); presentation.collapse() }
+        if held { presentation.toggleSplitGesture() }
         else { presentation.cyclePrimary(forward: forward) }
     }
 
@@ -116,7 +116,7 @@ final class NotchPanelController {
         media.$controlError.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         media.$currentTrack.map { $0?.sourceBundleID }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         calendar.$currentEvent.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
-        clock.$timers.map { min($0.count, 2) }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
+        clock.$timers.map { $0.map { ClockPlaybackState(id: $0.id, paused: $0.paused) } }.removeDuplicates().sink { [weak self] _ in self?.queueUpdate() }.store(in: &cancellables)
         presentation.$expanded.removeDuplicates().dropFirst().sink { [weak self] expanded in
             guard !expanded else { return }
             self?.dataManager.showMatchSelector = false
@@ -143,6 +143,8 @@ final class NotchPanelController {
     private func refreshActivities() {
         presentation.update(sports: dataManager.activeMatch != nil,
                             music: media.currentTrack != nil, clock: !clock.timers.isEmpty, calendar: calendar.currentEvent != nil, approval: !approvals.requests.isEmpty)
+        presentation.observeClock(clock.timers.map { ClockPlaybackState(id: $0.id, paused: $0.paused) },
+                                  fresh: clock.observedAt != nil)
     }
 
     func repositionForScreen() {
@@ -192,8 +194,7 @@ final class NotchPanelController {
         guard !presentation.suspended else { hide(); return }
         let layout = NotchGeometry.layout(screen: screen.frame, safeTop: screen.safeAreaInsets.top,
             leftArea: screen.auxiliaryTopLeftArea, rightArea: screen.auxiliaryTopRightArea,
-            simulated: dataManager.forceNotchLayout, expanded: presentation.expanded, contentHeight: expandedHeight,
-            expandedWidth: presentation.selectedTab == .clock ? 440 : 600)
+            simulated: dataManager.forceNotchLayout, expanded: presentation.expanded, contentHeight: expandedHeight)
         if presentation.expanded {
             if presentation.expandedPanelHeight != layout.primary.height { presentation.expandedPanelHeight = layout.primary.height }
             if presentation.expandedPanelWidth != layout.primary.width { presentation.expandedPanelWidth = layout.primary.width }
@@ -240,7 +241,7 @@ final class NotchPanelController {
         let epoch = (frameEpochs[key] ?? 0) + 1
         frameEpochs[key] = epoch
         targetFrames[key] = frame
-        let tucked = frame.offsetBy(dx: frame.midX < panel.frame.midX ? 32 : -32, dy: 0)
+        let tucked = NotchGeometry.tuckedSatellite(frame, toward: panel.frame.midX)
         guard animated else {
             window.setFrame(frame, display: true); window.alphaValue = 1
             if visible { window.orderFrontRegardless() } else { window.orderOut(nil) }
@@ -251,8 +252,8 @@ final class NotchPanelController {
             window.orderFrontRegardless()
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.32
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.20, 0, 0.20, 1)
+            context.duration = 0.36
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.8, 0.25, 1)
             window.animator().setFrame(visible ? frame : tucked, display: true)
             window.animator().alphaValue = visible ? 1 : 0
         } completionHandler: { [weak self, weak window] in

@@ -13,6 +13,9 @@ final class NotchTests: XCTestCase {
         XCTAssertEqual(compact.primary.midX,screen.midX)
         XCTAssertEqual(expanded.primary.maxY,compact.primary.maxY)
         XCTAssertEqual(expanded.primary.midX,compact.primary.midX)
+        XCTAssertEqual(expanded.primary.width,compact.primary.width)
+        XCTAssertEqual(expanded.secondary,compact.secondary)
+        XCTAssertEqual(expanded.tertiary,compact.tertiary)
         XCTAssertLessThan(compact.primary.width,600)
         XCTAssertLessThan(compact.secondary.maxX,compact.primary.minX)
         XCTAssertGreaterThan(compact.tertiary.minX,compact.primary.maxX)
@@ -30,8 +33,8 @@ final class NotchTests: XCTestCase {
     }
     func testTimerPanelHasCompactSizeWithSameCameraAnchor() {
         let screen = CGRect(x:0,y:0,width:1512,height:982)
-        let timer = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120,expandedWidth:440)
-        XCTAssertEqual(timer.primary.width,440)
+        let timer = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120)
+        XCTAssertEqual(timer.primary.width,404)
         XCTAssertEqual(timer.primary.height,170)
         XCTAssertEqual(timer.primary.midX,screen.midX)
         XCTAssertEqual(timer.primary.maxY,screen.maxY)

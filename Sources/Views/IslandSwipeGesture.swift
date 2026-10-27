@@ -47,7 +47,7 @@ struct IslandSwipeGesture: ViewModifier {
                         return
                     }
                     switch intent {
-                    case .toggleMerge: presentation.setMerged(!presentation.merged); presentation.collapse()
+                    case .toggleMerge: presentation.toggleSplitGesture()
                     case .next: presentation.cyclePrimary()
                     case .previous: presentation.cyclePrimary(forward: false)
                     case .open:

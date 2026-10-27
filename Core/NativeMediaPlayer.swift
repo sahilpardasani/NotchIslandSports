@@ -16,4 +16,13 @@ public enum NativeMediaPlayer: String, Sendable, CaseIterable {
         }
         return "tell application id \"\(rawValue)\"\n\(action)\nend tell"
     }
+    /// Only numeric positions and an escaped, exact track title enter the script.
+    public func seekScript(position: Double, title: String) -> String? {
+        guard position.isFinite, position >= 0, !title.isEmpty else { return nil }
+        let literal = title.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r")
+        return "tell application id \"\(rawValue)\"\nif name of current track is not \"\(literal)\" then error \"The current track changed\"\nset player position to \(position)\nend tell"
+    }
+
 }

@@ -291,7 +291,7 @@ final class CricketService {
         let competition = competitions?.first
         let competitors = competition?["competitors"] as? [[String: Any]] ?? []
 
-        let statusDict = header?["status"] as? [String: Any] ?? (json["status"] as? [String: Any] ?? [:])
+        let statusDict = ESPNStatusParser.summaryStatus(competition: competition, event: header, root: json)
         let statusType = statusDict["type"] as? [String: Any]
         let statusState = statusType?["state"] as? String ?? ""
         let statusDescription = statusType?["description"] as? String ?? ""
@@ -798,3 +798,4 @@ final class CricketService {
         return Partnership(runs: runs, balls: balls, batsman1: batsman1, batsman2: batsman2)
     }
 }
+

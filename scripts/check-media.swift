@@ -53,6 +53,19 @@ import IslandCore
         check(MediaMotion.barHeight(elapsed: 10, index: 1, moving: false, playing: false) == 4, "Paused bars settle")
         check(MediaMotion.barHeight(elapsed: 10, index: 1, moving: false, playing: true) == MediaMotion.barHeight(elapsed: 20, index: 1, moving: false, playing: true), "Reduced-motion bars stay static")
         check((0..<300).allSatisfy { step in (0..<5).allSatisfy { index in (5...18).contains(MediaMotion.barHeight(elapsed: Double(step) / 30, index: index, moving: true, playing: true)) } }, "Animated bars remain within compact bounds")
+        check((0..<1800).allSatisfy { step in (0..<5).allSatisfy { index in
+            let t = Double(step) / 30
+            return abs(MediaMotion.barHeight(elapsed: t + 1.0 / 30, index: index, moving: true, playing: true)
+                - MediaMotion.barHeight(elapsed: t, index: index, moving: true, playing: true)) < 0.8
+        } }, "Playback waveform has no abrupt frame-to-frame jumps")
+        check((0..<1800).allSatisfy { step in
+            MediaMotion.barHeight(elapsed: Double(step) / 30, index: 0, moving: true, playing: true) <= 10.85
+        }, "Waveform outer edge stays tapered")
+        check(MediaMotion.barHeight(elapsed: .nan, index: 2, moving: true, playing: true) == 17,
+            "Invalid waveform time uses a static bounded shape")
+        check(MediaMotion.barHeight(elapsed: 10, index: 0, moving: true, playing: true)
+            != MediaMotion.barHeight(elapsed: 10, index: 4, moving: true, playing: true),
+            "Waveform edges do not bounce in lockstep")
         var session = MediaSessionPresence()
         check(!session.update(bundleID: "browser", title: "Old video", playing: false), "Ignore cached paused metadata at launch")
         check(session.update(bundleID: "browser", title: "Video", playing: true), "Playback creates a media activity")
@@ -94,6 +107,30 @@ import IslandCore
         check(!IslandDragIntent.isInward(horizontal: -24, vertical: 2, satelliteOnLeft: true), "Outward drag still pages")
         check(!IslandDragIntent.isInward(horizontal: 8, vertical: 2, satelliteOnLeft: true), "Jitter cannot merge")
         check(!IslandDragIntent.isInward(horizontal: 24, vertical: 30, satelliteOnLeft: true), "Pull down never merges")
+        let identity = MediaPlaybackIdentity(bundleID: "com.spotify.client", title: "Track", artist: "Artist", duration: 200)
+        var drag = MediaScrubSession(identity: identity)
+        drag.update(x: 25, width: 100, current: identity)
+        check(drag.destination(current: identity) == 50, "Seek maps bar coordinate to song position")
+        drag.update(x: 75, width: 100, current: identity)
+        check(drag.target == 150, "Dragging previews a new position without sending controls")
+        drag.update(x: -20, width: 100, current: identity)
+        check(drag.target == 0, "Dragging past start clamps to zero")
+        drag.update(x: 120, width: 100, current: identity)
+        check(drag.target == 200, "Dragging past end clamps to duration")
+        let replacement = MediaPlaybackIdentity(bundleID: "com.spotify.client", title: "Next Track", artist: "Artist", duration: 200)
+        check(drag.destination(current: replacement) == nil, "Track changes reject a pending seek")
+        drag.update(x: 50, width: 100, current: replacement)
+        drag.update(x: 50, width: 100, current: identity)
+        check(drag.cancelled && drag.target == nil, "A cancelled drag cannot restart midway on another track")
+        check(MediaScrubSession.position(x: .nan, width: 100, duration: 200) == nil, "Invalid coordinate cannot seek")
+        check(MediaScrubSession.position(x: 20, width: 0, duration: 200) == nil, "Zero-width bar cannot seek")
+        check(MediaScrubSession.position(x: 20, width: 100, duration: 0) == nil, "Unknown duration/live streams cannot seek")
+        for player in NativeMediaPlayer.allCases {
+            let script = player.seekScript(position: 42.5, title: "Song \"A\"\nB\\C")!
+            check(script.contains("set player position to 42.5") && script.contains(player.rawValue), "Seek targets the exact native player and time")
+            check(script.contains("if name of current track is not") && script.contains("Song \\\"A\\\"\\nB\\\\C"), "Native seek revalidates and safely escapes the title")
+            check(player.seekScript(position: .infinity, title: "A") == nil && player.seekScript(position: -1, title: "A") == nil, "Invalid native seek rejected")
+        }
         print("Passed \(count) media snapshot, lifecycle, motion and gesture checks.")
     }
 }

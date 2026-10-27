@@ -84,6 +84,17 @@ protocol SportEvent: Identifiable {
 // MARK: - ESPN Status Parser (shared utility)
 
 enum ESPNStatusParser {
+    /// Summary responses normally place live status on the competition. Older
+    /// endpoints place it on the event/header or root; empty objects must fall through.
+    static func summaryStatus(competition: [String: Any]?, event: [String: Any]?, root: [String: Any]) -> [String: Any] {
+        for container in [competition, event, root] {
+            if let status = container?["status"] as? [String: Any],
+               let type = status["type"] as? [String: Any],
+               let state = type["state"] as? String, !state.isEmpty { return status }
+        }
+        return [:]
+    }
+
     /// Parses ESPN's state string (\"pre\", \"in\", \"post\") into our MatchStatus.
     /// Accepts ALL states — never filters out any match.
     static func parseState(_ state: String) -> MatchStatus {
@@ -111,3 +122,4 @@ enum ESPNStatusParser {
         return formatter.date(from: dateString)
     }
 }
+

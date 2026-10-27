@@ -17,6 +17,9 @@ struct NowPlayingTrack: Equatable {
     let dominantColor: Color
     var sourceBundleID: String? = nil
     var hasSourceTitle = true
+    var playbackIdentity: MediaPlaybackIdentity {
+        .init(bundleID: sourceBundleID ?? "", title: title, artist: artist, duration: duration)
+    }
 }
 
 // MARK: - NowPlayingManager
@@ -46,6 +49,7 @@ final class NowPlayingManager: ObservableObject {
         guard currentTrack?.hasSourceTitle == true, let id = currentTrack?.sourceBundleID else { return false }
         return adapter.listening || NativeMediaPlayer(rawValue: id) != nil
     }
+    var canSeek: Bool { canControl && (currentTrack?.duration ?? 0) > 0 && currentTrack?.duration.isFinite == true }
     func elapsedTime() -> TimeInterval { positionAnchor.value(at: ProcessInfo.processInfo.systemUptime) }
     private var getPID: (@convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void)?
     private var requestID: UUID?
@@ -326,6 +330,24 @@ final class NowPlayingManager: ObservableObject {
     func skipForward15() { send(.forward) }
     func skipBackward15() { send(.backward) }
 
+    func seek(to position: Double, expected: MediaPlaybackIdentity) {
+        guard isActive, enabled, canSeek, let track = currentTrack,
+              track.playbackIdentity == expected, position.isFinite else { return }
+        let target = min(track.duration, max(0, position))
+        // Native players expose a targeted scriptable position. Other players
+        // use the existing system adapter, which revalidates source and title.
+        if let player = NativeMediaPlayer(rawValue: track.sourceBundleID ?? ""),
+           let script = player.seekScript(position: target, title: track.title) {
+            runNative(script, expected: track)
+        } else if adapter.listening {
+            adapter.seek(to: target, expected: track) { [weak self] success in
+                guard let self, self.currentTrack?.playbackIdentity == expected else { return }
+                self.controlError = success ? nil : "This player could not seek. Try its own controls."
+                // Source snapshots confirm the position; never invent a successful seek.
+            }
+        }
+    }
+
     private typealias Command = NativeMediaPlayer.Command
     private func send(_ command: Command) {
         if adapter.listening, isActive, enabled, let track = currentTrack {
@@ -353,8 +375,12 @@ final class NowPlayingManager: ObservableObject {
     }
 
     private func sendNative(_ command: Command, expected track: NowPlayingTrack) {
+        guard let player = NativeMediaPlayer(rawValue: track.sourceBundleID ?? "") else { return }
+        runNative(player.script(for: command), expected: track)
+    }
+    private func runNative(_ script: String, expected track: NowPlayingTrack) {
         guard isActive, enabled, commandProcess == nil, let source = track.sourceBundleID,
-              let player = NativeMediaPlayer(rawValue: source), let getPID else { return }
+              let getPID else { return }
         getPID(DispatchQueue.main) { [weak self] pid in
             guard let self, self.isActive, self.enabled, self.currentTrack?.sourceBundleID == source,
                   self.currentTrack?.title == track.title,
@@ -362,7 +388,7 @@ final class NowPlayingManager: ObservableObject {
                   self.commandProcess == nil else { return }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", player.script(for: command)]
+            process.arguments = ["-e", script]
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             process.terminationHandler = { [weak self] process in

@@ -183,3 +183,10 @@ public struct ClockObservationCache: Sendable {
         timers = timers.map { .init(id: $0.id, remaining: $0.remaining, paused: $0.paused) }
     }
 }
+
+/// Only identity/state affect layout; countdown seconds never restart animations.
+public struct ClockPlaybackState: Equatable, Sendable {
+    public let id: String
+    public let paused: Bool
+    public init(id: String, paused: Bool) { self.id = id; self.paused = paused }
+}

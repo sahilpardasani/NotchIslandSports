@@ -217,6 +217,7 @@ struct ExpandedCricketView: View {
                     
                     HStack(spacing: 4) {
                         Text(HindiTranslator.translate(match.homeScore, isHindi: isHindi))
+                            .lineLimit(1).minimumScaleFactor(0.7)
                             .font(.system(.title3, design: .monospaced).weight(.bold))
                             .foregroundColor(DesignSystem.primaryText)
                         
@@ -248,6 +249,7 @@ struct ExpandedCricketView: View {
                         .lineLimit(1)
                     
                     Text(HindiTranslator.translate(match.awayScore, isHindi: isHindi))
+                        .lineLimit(1).minimumScaleFactor(0.65)
                         .font(.system(.title3, design: .monospaced).weight(.bold))
                         .foregroundColor(DesignSystem.primaryText)
                 }

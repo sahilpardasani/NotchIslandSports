@@ -34,7 +34,8 @@ final class APIClient {
     static let shared = APIClient()
 
     private let session: URLSession
-    private let permits = AsyncPermitPool(limit: 4)
+    private let permits = AsyncPermitPool(limit: 3)
+    private let selectedPermits = AsyncPermitPool(limit: 1)
     private let logger = Logger(subsystem: "com.notchisland.sports", category: "APIClient")
 
     private init() {
@@ -55,11 +56,14 @@ final class APIClient {
         self.session = URLSession(configuration: config)
     }
 
-    private func limitedData(from url: URL) async throws -> (Data, URLResponse) {
+    private func limitedData(from url: URL, fresh: Bool = false) async throws -> (Data, URLResponse) {
+        // Reserve one of four network slots for the selected score. Large
+        // catalog sweeps cannot leave its refresh at the back of their queue.
+        let permits = SportsRequestPolicy.isSelectedDetail(url, fresh: fresh) ? selectedPermits : self.permits
         try await permits.acquire()
         do {
             try Task.checkCancellation()
-            let result = try await session.data(from: url)
+            let result = try await session.data(for: SportsRequestPolicy.request(url, fresh: fresh))
             await permits.release()
             return result
         } catch {
@@ -113,12 +117,12 @@ final class APIClient {
     // MARK: - Raw JSON Fetch
 
     /// Fetches raw JSON as `[String: Any]` for manual parsing of complex ESPN responses.
-    func fetchRawJSON(from url: URL) async throws -> [String: Any] {
+    func fetchRawJSON(from url: URL, fresh: Bool = false) async throws -> [String: Any] {
         logger.info("🌐 Fetching raw JSON: \(url.absoluteString)")
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await limitedData(from: url)
+            (data, response) = try await limitedData(from: url, fresh: fresh)
         } catch {
             logger.error("❌ Request failed: \(error.localizedDescription)")
             if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
@@ -145,6 +149,14 @@ final class APIClient {
             )
         }
 
+        if url.lastPathComponent == "summary" {
+            let header = json["header"] as? [String: Any] ?? json["event"] as? [String: Any]
+            let competition = (header?["competitions"] as? [[String: Any]])?.first
+            guard (competition?["competitors"] as? [[String: Any]])?.count ?? 0 >= 2,
+                  !ESPNStatusParser.summaryStatus(competition: competition, event: header, root: json).isEmpty else {
+                throw NetworkError.noData
+            }
+        }
         logger.info("✅ Successfully fetched raw JSON from \(url.lastPathComponent)")
         return json
     }

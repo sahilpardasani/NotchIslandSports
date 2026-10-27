@@ -273,7 +273,7 @@ struct NowPlayingExpandedView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 26)
-                    .padding(.top, 10)
+                    .padding(.top, 4)
                     .padding(.bottom, 6)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -307,62 +307,87 @@ private struct MediaProgressView: View {
     let track: NowPlayingTrack
     let visible: Bool
     let lowPower: Bool
+    @State private var scrub: MediaScrubSession?
+    @GestureState private var dragging = false
+
+    private var displayedPosition: Double { scrub?.target ?? manager.elapsedTime() }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: lowPower ? 2 : 1,
-            paused: !visible || !manager.isActive || !track.isPlaying || track.duration <= 0)) { _ in
-            VStack(spacing: 3) {
+            paused: !visible || !manager.isActive || !track.isPlaying || track.duration <= 0 || dragging)) { _ in
+            VStack(spacing: 1) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 4)
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [track.dominantColor, track.dominantColor.opacity(0.7)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(
-                                width: geo.size.width * CGFloat(progressRatio(track)),
-                                height: 4
-                            )
+                        Capsule().fill(Color.white.opacity(0.12)).frame(height: 4)
+                        Capsule().fill(track.dominantColor)
+                            .frame(width: geo.size.width * ratio, height: 4)
+                        if scrub?.target != nil {
+                            Circle().fill(track.dominantColor).frame(width: 10, height: 10)
+                                .offset(x: max(0, min(geo.size.width - 10, geo.size.width * ratio - 5)))
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .updating($dragging) { _, active, _ in active = true }
+                        .onChanged { value in
+                            guard manager.canSeek else { return }
+                            if scrub == nil { scrub = MediaScrubSession(identity: track.playbackIdentity) }
+                            scrub?.update(x: value.location.x, width: geo.size.width, current: track.playbackIdentity)
+                        }
+                        .onEnded { value in
+                            guard var session = scrub else { return }
+                            session.update(x: value.location.x, width: geo.size.width, current: track.playbackIdentity)
+                            scrub = nil
+                            if let target = session.destination(current: track.playbackIdentity) {
+                                manager.seek(to: target, expected: session.identity)
+                            }
+                        })
+                    .focusable(manager.canSeek)
+                    .onMoveCommand { direction in
+                        if direction == .left { adjust(-5) }
+                        else if direction == .right { adjust(5) }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Playback position")
+                    .accessibilityValue("\(formatTime(displayedPosition)) of \(formatTime(track.duration))")
+                    .accessibilityHint(manager.canSeek ? "Adjust to seek forward or backward" : "Seeking unavailable for this player")
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: adjust(5)
+                        case .decrement: adjust(-5)
+                        @unknown default: break
+                        }
                     }
                 }
-                .frame(height: 4)
-
-                // Time labels
+                .frame(height: 20)
                 HStack {
-                    Text(formatTime(manager.elapsedTime()))
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.45))
+                    Text(formatTime(displayedPosition))
                     Spacer()
-                    Text("-" + formatTime(max(0, track.duration - manager.elapsedTime())))
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.45))
+                    Text("-" + formatTime(max(0, track.duration - displayedPosition)))
                 }
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.45))
                 .padding(.top, 2)
             }
             .padding(.horizontal, 14)
-            .padding(.top, 12)
-
+            .padding(.top, 4)
         }
+        .onChange(of: track.playbackIdentity) { _ in scrub?.cancel() }
+        .onChange(of: dragging) { active in if !active { scrub = nil } }
+        .onDisappear { scrub = nil }
     }
 
-    // MARK: - Helpers
-
-    private func progressRatio(_ track: NowPlayingTrack) -> Double {
-        guard track.duration > 0 else { return 0 }
-        return min(1.0, max(0.0, manager.elapsedTime() / track.duration))
+    private var ratio: Double {
+        guard track.duration.isFinite, track.duration > 0 else { return 0 }
+        return min(1, max(0, displayedPosition / track.duration))
     }
-
-    private func formatTime(_ t: TimeInterval) -> String {
-        guard t > 0, !t.isNaN else { return "0:00" }
-        let m = Int(t) / 60; let s = Int(t) % 60
-        return String(format: "%d:%02d", m, s)
+    private func adjust(_ seconds: Double) {
+        manager.seek(to: manager.elapsedTime() + seconds, expected: track.playbackIdentity)
+    }
+    private func formatTime(_ time: TimeInterval) -> String {
+        guard time.isFinite, time > 0, time < Double(Int.max) else { return "0:00" }
+        return String(format: "%d:%02d", Int(time) / 60, Int(time) % 60)
     }
 }
 

@@ -1,9 +1,45 @@
-# Preview 1.6 (build 18) — Clock recovery and visible pill boundaries
+# Preview 1.6 (build 19) — Stable layout, media seeking and score refresh
 
 This update supersedes the menu, hover, setup and media-control descriptions in earlier preview notes. Existing sports, read-only Calendar rollover, physical-notch positioning, compact height, reduced-motion handling and provider sleep policies remain.
 
 
-## Build 18 Clock recovery and pill boundaries (current)
+## Build 19 fixed expansion footprint and native Resume (current)
+
+Opening a scorecard, media controls, Clock, Calendar or an approval keeps the main island's collapsed width and top anchor; it expands downward. Companion pills keep their exact positions and sizes, including when menu crowding places both on one side. Long cricket scores scale within the narrower header. Plain displays use a consistent 352-point width in both states.
+
+The Clock listener now observes timer identity and paused/running state, not just timer count. A freshly observed paused-to-running transition restores the split automatically, including when Resume is pressed in Apple Clock. If the Clock controls are expanded, they collapse back to the main activity; another expanded page stays open. Stale observations and failed commands do not trigger a split, and subsequent countdown updates do not undo a deliberate merge. No additional polling is introduced.
+
+Companion pills emerge with a short 0.36-second size/position/fade transition, top-aligned and starting closer to the main island. This is a custom animation inspired by [Apple's Live Activities guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities), not Apple's proprietary animation. Reduce Motion and Low Power Mode retain immediate transitions. No hover is added. Version 1.6.0, bundle/About build 19. Geometry and resume transitions are covered by regression fixtures; live Clock control round-trip and device frame pacing still require device validation.
+
+Build 19 validation: 517 standalone checks and the no-hover guard passed. These cover stable expansion frames, resume-driven splitting, companion hiding, media seeking safeguards, smooth waveform bounds, and selected sports refresh callbacks. Nine socket integration checks are skipped in this sandbox; synthetic tests do not prove live Clock, player, provider latency or battery behavior.
+
+### Playback waveform and three activities
+
+Reviewed Apple's [iPhone 18 Pro announcement](https://www.apple.com/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/), [current Dynamic Island guide](https://support.apple.com/guide/iphone/view-live-activities-in-the-dynamic-island-iph28f50d10d/ios), and [original Music/Maps/timer presentation](https://www.apple.com/newsroom/2022/09/apple-debuts-iphone-14-pro-and-iphone-14-pro-max/). Apple now documents up to three Live Activities on iPhone 18 Pro models. Older generic two-activity guidance must not be treated as the limit for those models.
+
+The Mac adaptation keeps the full score with separate media artwork and native timer companions, up to three activities where menu space allows. Calendar remains a swipe page, not a slot. The camera and menu-bar constraints differ from iPhone, so placement is deliberately not a pixel-for-pixel reproduction. Hold-and-swipe remains the user's chosen merge/restore gesture.
+
+Playback bars now form a tapered, rounded, center-aligned five-bar waveform with overlapping smooth motion and the track's artwork tint, replacing the uniform-height oscillation and fixed cyan color in the main media page. The small companion remains static artwork. Paused bars settle; hidden surfaces, Reduce Motion and Low Power Mode do not animate. The existing maximum requested 30 Hz redraw rate remains. This is a custom decorative playback indicator: the current metadata adapters do not provide audio levels, and the app does not capture audio, claim beat synchronization, or reproduce Apple's unpublished animation algorithm.
+
+### Browser website permission limitation
+
+ChatGPT Browser’s website-access consent card is not connected by this build. The current hook contract does not establish a request/decision bridge for that separate control; respond in ChatGPT. Supported command, file-access and tool requests continue through the existing synchronous hook. See [the exact scope](APPROVALS.md#browser-website-access-prompts).
+
+### Media seeking and swipe behavior
+
+The expanded progress bar accepts clicks and drags in a 20-point-high hit area. Dragging previews the time; release sends one seek, avoiding command spam. Arrow keys and VoiceOver adjust by five seconds. Unknown-duration streams cannot seek. A changed track/player cancels an in-progress drag. Spotify and Apple Music use targeted native player-position commands with exact title validation; other players use the experimental system adapter with source/title revalidation. Actual player response remains provider-dependent; no optimistic playback position is displayed after release. Native Automation permission may be needed once.
+
+Quick sideways swipes can now browse media in the main compact island while a score is selected. The selected sport stays reserved at full size and never becomes a small score pill. Media's duplicate small pill hides while its main page is selected. Holding and swiping on that media page restores the big score and small media/timer pills; elsewhere the existing merge/restore gesture remains. Ending the media session returns to the score. Calendar remains a browse page, never a live slot.
+
+The matching small companion hides while media or Clock controls are expanded. The other companion retains its position; collapsing restores the hidden one, except when media remains the explicitly selected compact main page. No slots are reordered.
+
+### Automatic sports refresh
+
+Selected tennis refresh now reads the exact competition from one fresh tour/day scoreboard instead of the generic summary endpoint. Completed selected matches are not removed by the catalog's twenty-result limit; point score and numeric set-score totals are retained when supplied. The [ESPN tennis scoreboard](https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard) was inspected for its tournament/competition structure; match updates and service latency are not guaranteed.
+
+Team-sport and cricket summaries now prefer competition-level status, falling back to the event/header and root. Invalid summaries keep the last valid score instead of publishing placeholders. Selected summaries and tennis/F1 updates bypass local HTTP cache and request server revalidation. One of the existing four network slots is reserved for selected-detail requests so full catalog discovery cannot starve them. Timers use the common run-loop mode, repeated identical presentation updates do not postpone their deadlines, and a newly live selected match refreshes promptly. Normal live cadence stays 30 seconds compact / 15 seconds expanded, doubled in Low Power Mode. Failure backoff for live scores caps at 120 seconds (240 in Low Power Mode); completed matches retain the 15-minute base interval. Timers still stop during sleep. Providers can delay source updates independently.
+
+## Build 18 Clock recovery and pill boundaries (retained)
 
 Native Clock discovery now recognizes active/paused UUID sidebar cards even when Cancel is in a separate detail pane. Observation does not grant control: native actions still require a fresh, unambiguous identity and button association. Wrapped selected cards are supported, button text is chosen from semantic labels instead of numeric AX values, and bounded AX reads batch attributes to reduce round trips. Failed reads retain the last timer read-only for less than ten seconds; a successful empty snapshot clears it immediately. Retry delays back off to 30 seconds, and opening Clock content requests a fresh observation. Permission/configuration and empty observation messages are distinguished.
 
@@ -128,7 +164,7 @@ User-clicked controls invoke system transport commands. A local adapter patch ch
 
 References: [upstream adapter](https://github.com/ungive/mediaremote-adapter), [reported direct API regression](https://github.com/aviwad/LyricFever/issues/94). The bundled license is in the app’s Resources folder.
 
-## Verification
+## Earlier build verification (retained history)
 
 - 203 standalone logic checks passed: activity selection/gestures, Calendar boundaries, geometry, Clock parsing/control policy, browser metadata parsing and limits. A separate source guard fails if hover state, tracking areas or pointer entry/exit/movement handlers are introduced.
 - Release app compiled with Command Line Tools and macOS 26.5 SDK. Strict ad hoc signature and ZIP checks are performed on the packaged output.

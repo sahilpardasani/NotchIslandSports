@@ -29,10 +29,10 @@ import IslandCore
         check(plain.cameraHeight == 0 && plain.primary.maxY == 978, "Non-notched display fallback")
         let scaled = NotchGeometry.layout(screen:screen,safeTop:24,leftArea:nil,rightArea:nil,expanded:false,contentHeight:410)
         check(scaled.primary.height == 24, "Scaled camera bands do not inherit the old minimum height")
-        let clockLayout = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:right,expanded:true,contentHeight:120,expandedWidth:440)
-        check(clockLayout.primary.width == 440 && clockLayout.primary.height == 170, "Timer opens as a compact control panel")
+        let clockLayout = NotchGeometry.layout(screen:screen,safeTop:32,leftArea:left,rightArea:right,expanded:true,contentHeight:120)
+        check(clockLayout.primary.width == compact.primary.width && clockLayout.primary.height == 170, "Timer opens as a compact control panel")
         check(clockLayout.primary.midX == compact.primary.midX && clockLayout.primary.maxY == screen.maxY, "Timer expansion preserves camera anchor")
-        let narrowClock = NotchGeometry.layout(screen:CGRect(x:0,y:0,width:800,height:600),safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120,expandedWidth:440)
+        let narrowClock = NotchGeometry.layout(screen:CGRect(x:0,y:0,width:800,height:600),safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:120)
         check(narrowClock.secondary.minX >= 0 && narrowClock.tertiary.maxX <= 800, "Timer and satellites remain on a smaller display")
         let clear = MenuBarPlacement.layout(base: compact, screen: screen, occupied: [], expanded: false, satelliteCount: 2)
         check(clear.primary == compact.primary && clear.secondary == compact.secondary, "Clear menus retain centered layout")
@@ -63,6 +63,23 @@ import IslandCore
         let otherFallback = fallback.map { $0.offsetBy(dx: -1512, dy: 500) }
         let otherPlacement = MenuBarPlacement.layout(base: negative, screen: other, occupied: otherFallback, expanded: false, satelliteCount: 2)
         check(otherPlacement.primary == negative.primary, "Menu fallback preserves anchor on negative-origin display")
+        for occupied in [[], [menu], [rightMenu], [menu, rightMenu], fallback] {
+            let before = MenuBarPlacement.layout(base: compact, screen: screen, occupied: occupied, expanded: false, satelliteCount: 2)
+            for height in [120.0, 180.0, 284.0, 420.0] {
+                let base = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: left, rightArea: right, expanded: true, contentHeight: height)
+                let after = MenuBarPlacement.layout(base: base, screen: screen, occupied: occupied, expanded: true, satelliteCount: 2)
+                check(before.primary.minX == after.primary.minX && before.primary.width == after.primary.width && before.primary.maxY == after.primary.maxY && before.secondary == after.secondary && before.tertiary == after.tertiary,
+                      "Every expanded page preserves the compact footprint and both companion frames, even beside crowded menus")
+            }
+        }
+        let plainExpanded = NotchGeometry.layout(screen:screen,safeTop:0,leftArea:nil,rightArea:nil,expanded:true,contentHeight:284)
+        check(plain.primary.width == plainExpanded.primary.width && plain.secondary == plainExpanded.secondary && plain.tertiary == plainExpanded.tertiary, "Plain display expands vertically only")
+        let negativeExpanded = NotchGeometry.layout(screen:other,safeTop:32,leftArea:nil,rightArea:nil,expanded:true,contentHeight:284)
+        check(negative.primary.minX == negativeExpanded.primary.minX && negative.secondary == negativeExpanded.secondary && negative.tertiary == negativeExpanded.tertiary, "Negative-origin display expands vertically only")
+        for frame in [compact.secondary, compact.tertiary] {
+            let tucked = NotchGeometry.tuckedSatellite(frame, toward: compact.centerX)
+            check(tucked.maxY == frame.maxY && tucked.width < frame.width && abs(tucked.midX - compact.centerX) < abs(frame.midX - compact.centerX), "Split emerges toward companion position while its top remains fixed")
+        }
         var selection = ActivitySelection()
         selection.update(available:[.sports,.clock,.calendar])
         check(selection.primary == .sports && selection.secondary == .clock && selection.tertiary == nil && selection.overflow.isEmpty, "Calendar cannot create third split")

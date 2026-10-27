@@ -314,6 +314,9 @@ class SportsDataManager: ObservableObject {
                 detailError = nil
                 detailFailures = 0
                 scheduleDetail(after: 0.2)
+            } else if oldValue?.status != activeMatch?.status && detailTask == nil {
+                // A catalog update can move a selected match from upcoming to live.
+                scheduleDetail(after: 0.2)
             }
         }
     }
@@ -361,6 +364,7 @@ class SportsDataManager: ObservableObject {
 
     // MARK: - Services
 
+    private let detailLoader: ((AnyMatch) async throws -> AnyMatch)?
     private let cricketService = CricketService()
     private let tennisService = TennisService()
     private let nflService = NFLService()
@@ -427,7 +431,8 @@ class SportsDataManager: ObservableObject {
     }
     #endif
 
-    init() {
+    init(detailLoader: ((AnyMatch) async throws -> AnyMatch)? = nil) {
+        self.detailLoader = detailLoader
         #if DEBUG
         if shouldRunMockData() {
             self.isUsingMockData = true
@@ -479,10 +484,11 @@ class SportsDataManager: ObservableObject {
         pollingTimer?.invalidate()
         let interval = PollPolicy.discovery(browsing: showMatchSelector,
                                             lowPower: lowPowerMode, failures: discoveryFailures)
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+        pollingTimer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.requestDiscovery() }
         }
         pollingTimer?.tolerance = interval * 0.15
+        if let pollingTimer { RunLoop.main.add(pollingTimer, forMode: .common) }
     }
 
     private func scheduleDetail(after delay: TimeInterval? = nil) {
@@ -492,13 +498,15 @@ class SportsDataManager: ObservableObject {
         let interval = delay ?? PollPolicy.detail(live: activeMatch?.isLive == true,
             completed: activeMatch?.isCompleted == true, expanded: isExpanded,
             lowPower: lowPowerMode, failures: detailFailures)
-        detailTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+        detailTimer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in await self?.fetchActiveMatchDetail() }
         }
         detailTimer?.tolerance = interval * 0.1
+        if let detailTimer { RunLoop.main.add(detailTimer, forMode: .common) }
     }
 
     func setPresentation(expanded: Bool, lowPower: Bool) {
+        guard expanded != isExpanded || lowPower != lowPowerMode else { return }
         let becameExpanded = expanded && !isExpanded
         isExpanded = expanded
         lowPowerMode = lowPower
@@ -945,13 +953,14 @@ class SportsDataManager: ObservableObject {
         do {
             let updatedMatch: AnyMatch
 
+            if let detailLoader { updatedMatch = try await detailLoader(match) } else {
             switch match {
             case .cricket(let m):
                 let detail = try await cricketService.fetchMatchDetail(eventId: m.id, leagueId: m.leagueId)
                 updatedMatch = .cricket(detail)
 
             case .tennis(let m):
-                let detail = try await tennisService.fetchMatchDetail(eventId: m.id, isWTA: m.isWTA)
+                let detail = try await tennisService.fetchMatchDetail(eventId: m.id, isWTA: m.isWTA, eventDate: m.eventDate)
                 updatedMatch = .tennis(detail)
 
             case .nfl(let m):
@@ -998,14 +1007,15 @@ class SportsDataManager: ObservableObject {
                 updatedMatch = .collegeHockey(detail)
 
             case .f1(let m):
-                let races = try await f1Service.fetchRaces()
+                let races = try await f1Service.fetchRaces(fresh: true)
                 if let updated = races.first(where: { $0.id == m.id }) {
                     updatedMatch = .f1(updated)
                 } else {
-                    updatedMatch = .f1(m)
+                    throw NetworkError.noData
                 }
             }
 
+            }
             guard !Task.isCancelled, lifecycleGeneration.accepts(generation),
                   selectionGeneration.accepts(selection), activeMatch?.identity == match.identity else { return }
             activeMatch = updatedMatch
@@ -1238,3 +1248,15 @@ class SportsDataManager: ObservableObject {
     }
 }
 
+
+#if DEBUG
+extension SportsDataManager {
+    /// Start only the selected-detail scheduler; injected fixture loads never use the network.
+    func beginDetailFixture(_ match: AnyMatch) {
+        precondition(detailLoader != nil)
+        isPolling = true; suspended = false; activeMatch = match
+    }
+    var detailFixtureDeadline: Date? { detailTimer?.isValid == true ? detailTimer?.fireDate : nil }
+    func fireDetailFixture() { detailTimer?.fire() }
+}
+#endif

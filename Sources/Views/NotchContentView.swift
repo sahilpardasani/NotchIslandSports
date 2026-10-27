@@ -239,7 +239,8 @@ struct NotchContentView: View {
                     }
                 } else {
                     DynamicIslandWaveform(isPlaying: nowPlayingManager.currentTrack?.isPlaying == true,
-                        color: .cyan, barCount: 5, animationAllowed: mediaMotionAllowed && !presentation.expanded)
+                        color: nowPlayingManager.currentTrack?.dominantColor ?? .cyan,
+                        barCount: 5, animationAllowed: mediaMotionAllowed && !presentation.expanded)
                 }
             }
         }

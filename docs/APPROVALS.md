@@ -9,6 +9,7 @@
 | Claude Code CLI / supported local desktop Code sessions | Synchronous `PermissionRequest` hooks loaded on this Mac. |
 | Generic ChatGPT chat, Claude Chat/Cowork, cloud-only or remote sessions | No verified direct approval integration in this build. Respond in the originating app. |
 | Claude sandbox network prompt / general notifications | Not intercepted by the PermissionRequest adapter. These are not actionable approval cards. |
+| ChatGPT Browser “Allow ChatGPT to access https://…?” | Separate website-access prompt; no verified hook/decision bridge. Respond in ChatGPT. |
 
 The sources define their own hook support and managed restrictions. A successful installation is not proof that a particular session loads the hook. No private notification scraping or automatic clicking of source-app buttons is used.
 
@@ -51,3 +52,9 @@ The default panel has one action line, such as `Run: npm test`, `Edit: /path/fil
 The hook now reads one complete JSON object instead of one line. Pretty-printed stdin and complete JSON on a still-open pipe no longer fail or wait for the two-second input deadline. Delivery remains event-driven, now on a user-initiated queue. Already-connected helper binaries refresh when the updated app launches; hook definitions and trust are unchanged.
 
 [OpenAI’s hook contract](https://learn.chatgpt.com/docs/hooks#common-input-fields) specifies JSON on stdin; [Claude Code’s PermissionRequest hook](https://code.claude.com/docs/en/hooks#permissionrequest) runs when permission is needed. The integration uses that synchronous event, not delayed notification hooks. It cannot accelerate model reasoning, source-side hook scheduling, another policy hook, untrusted/disabled hooks or unsupported cloud/chat events. Tests measure only synthetic local transport, not source-to-screen latency.
+
+## Browser website-access prompts
+
+The desktop Browser card offering “Allow once”, “Allow for this site” or “Allow for all sites” is a separate website-access control described in [OpenAI’s browser extension documentation](https://learn.chatgpt.com/docs/chrome-extension#control-website-access). The documented [PermissionRequest hook](https://learn.chatgpt.com/docs/hooks#permissionrequest) does not establish that these in-browser consent cards emit its event or accept its decision. This build has no verified adapter for that card and does not claim to display or answer it. Existing wildcard matching already accepts every real supported PermissionRequest; adding another matcher cannot make a source emit a missing event.
+
+A working integration requires a source-provided pending-request event and a request-scoped decision channel, or a separately verified desktop adapter. Do not synthesize a pending card from an ordinary browser call, infer permission from a URL, alter allowlists, or return allow without an explicit user decision for that exact request. Keep the source prompt available until an end-to-end integration is verified.

@@ -26,3 +26,6 @@ app_sources=()
 while IFS= read -r source; do app_sources+=("$source"); done < <(find Sources -name '*.swift' ! -name main.swift ! -name AppDelegate.swift | sort)
 xcrun swiftc -DDEBUG -sdk "$sdk" -parse-as-library -I build/check-modules "${app_sources[@]}" scripts/check-energy.swift build/check-modules/IslandCore.o -o build/energy-checks
 build/energy-checks
+
+xcrun swiftc -DDEBUG -sdk "$sdk" -parse-as-library -I build/check-modules "${app_sources[@]}" scripts/check-sports.swift build/check-modules/IslandCore.o -o build/sports-checks
+build/sports-checks

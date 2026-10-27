@@ -66,10 +66,17 @@ final class SystemMediaAdapter {
         command?.terminate(); command = nil
     }
     func send(_ id: Int, expected: NowPlayingTrack, completion: @escaping (Bool) -> Void) {
-        guard command == nil, let bundle = expected.sourceBundleID, let (script, framework) = resources else { completion(false); return }
+        runControl(["send", String(id)], expected: expected, completion: completion)
+    }
+    func seek(to position: Double, expected: NowPlayingTrack, completion: @escaping (Bool) -> Void) {
+        guard position.isFinite, position >= 0, position <= Double(Int64.max / 1_000_000) else { completion(false); return }
+        runControl(["seek", String(Int64(position * 1_000_000))], expected: expected, completion: completion)
+    }
+    private func runControl(_ arguments: [String], expected: NowPlayingTrack, completion: @escaping (Bool) -> Void) {
+        guard command == nil, expected.hasSourceTitle, let bundle = expected.sourceBundleID, let (script, framework) = resources else { completion(false); return }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        child.arguments = [script, framework, "send", String(id)]
+        child.arguments = [script, framework] + arguments
         var environment = ProcessInfo.processInfo.environment
         environment["NOTCH_EXPECTED_MEDIA_BUNDLE"] = bundle
         environment["NOTCH_EXPECTED_MEDIA_TITLE"] = expected.title

@@ -18,11 +18,11 @@ import IslandCore
         defer { defaults.removePersistentDomain(forName: suite) }
         let folder = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-sports-stays-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
+        for (name, activity) in [("notch-three-activities", Optional<IslandActivity>.none), ("notch-media-browse", nil), ("notch-media-tucked", nil), ("notch-sports-stays-primary", nil), ("notch-calendar-compact", nil), ("notch-artwork-pill", nil), ("notch-menu-crowded", nil), ("notch-score-fallback", nil), ("notch-score-merged", nil),
                                   ("notch-calendar-expanded", .calendar), ("notch-clock-expanded", .clock),
                                   ("notch-clock-paused", .clock), ("notch-clock-unavailable", .clock),
                                   ("notch-clock-multiple", .clock), ("notch-clock-empty", .clock),
-                                  ("notch-approval-expanded", .approval), ("notch-chatgpt-approval", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-merged", nil)] {
+                                  ("notch-approval-expanded", .approval), ("notch-chatgpt-approval", .approval), ("notch-approval-crowded", nil), ("notch-music-expanded", .music), ("notch-sports-expanded", .sports), ("notch-score-expanded", .sports), ("notch-merged", nil)] {
             if name == "notch-artwork-pill" {
                 let cover = NSImage(size: NSSize(width: 96, height: 96))
                 cover.lockFocus()
@@ -36,7 +36,7 @@ import IslandCore
             let scoreRegression = name.hasPrefix("notch-score-")
             data.activeMatch = scoreRegression ? .cricket(CricketMatch(id: "layout-regression", status: .unknown,
                 homeTeam: "Sikkim", awayTeam: "Nagaland", homeTeamAbbrev: "SIKM", awayTeamAbbrev: "NAGA",
-                homeScore: "184", awayScore: "187 & 46/4", statusText: ""))
+                homeScore: "184 (34.0 ov)", awayScore: "187 & 46/4 (34 ov)", statusText: ""))
                 : MockDataProvider.getMockMatches().first { $0.sportType == .cricket }
             let clock = NativeClockManager.visualFixture(paused: name == "notch-clock-paused",
                 controllable: name != "notch-clock-unavailable", count: name == "notch-clock-multiple" ? 3 : name == "notch-clock-empty" ? 0 : 1,
@@ -45,6 +45,10 @@ import IslandCore
             presentation.cameraHeight = 32
             presentation.update(sports: true, music: true, clock: true, calendar: true, approval: approvalCrowded)
             if let activity { presentation.open(activity) }
+            if name == "notch-media-browse" || name == "notch-media-tucked" {
+                presentation.cyclePrimary()
+                if name == "notch-media-tucked" { presentation.toggleSplitGesture() }
+            }
             if name == "notch-sports-stays-primary" {
                 presentation.update(sports: true, music: true, clock: false)
                 presentation.promote(.music); presentation.collapse(); presentation.finishResize()
@@ -53,8 +57,7 @@ import IslandCore
             let screen = CGRect(x: 0, y: 0, width: 1200, height: 800)
             let geometry = NotchGeometry.layout(screen: screen, safeTop: 32, leftArea: nil, rightArea: nil,
                 expanded: activity != nil,
-                contentHeight: activity == .approval ? 114 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 284,
-                expandedWidth: activity == .clock ? 440 : 600)
+                contentHeight: activity == .approval ? 114 : activity == .calendar ? 420 : activity == .clock ? NativeClockView.contentHeight(timerCount: clock.timers.count) : activity == .music ? 180 : 284)
             let occupied = approvalCrowded ? [CGRect(x: 0, y: 768, width: 1200, height: 32)] : scoreRegression ? [CGRect(x: 0, y: 740, width: 510, height: 60),
                 CGRect(x: 960, y: 740, width: 240, height: 60)]
                 : name == "notch-menu-crowded" ? [CGRect(x: 0, y: 768, width: 500, height: 32)] : []
